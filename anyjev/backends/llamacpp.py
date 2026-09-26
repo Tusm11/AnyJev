@@ -17,6 +17,7 @@ silently reading the wrong logit. Parity against HFBackend: scripts/llamacpp_par
 """
 from __future__ import annotations
 
+import inspect
 import json
 import os
 from datetime import datetime
@@ -89,14 +90,25 @@ class GGUFTokenizer:
 
 
 class LlamaCppBackend:
-    def __init__(self, model_path: str, tokenizer: Any = None, name: Optional[str] = None,
+    """Read next-token logits from an owned GGUF model or a borrowed Llama instance.
+
+    A supplied instance is borrowed. Evaluation resets its inference context before
+    and after each judgment; callers must not use it concurrently.
+    """
+
+    def __init__(self, model_path: Optional[str] = None, tokenizer: Any = None, name: Optional[str] = None,
                  n_ctx: int = 4096, n_batch: int = 512, n_gpu_layers: int = 0,
-                 verbose: bool = False, **llama_kwargs: Any):
+                 verbose: bool = False, llm: Any = None, **llama_kwargs: Any):
+        if (model_path is None) == (llm is None):
+            raise ValueError("provide exactly one of model_path or llm")
         lib = _import_llama_cpp()
         self._lib = lib
-        self.llm = lib.Llama(model_path=model_path, n_ctx=n_ctx, n_batch=n_batch, n_gpu_layers=n_gpu_layers,
-                             logits_all=False, verbose=verbose, **llama_kwargs)
-        self.name = name or os.path.splitext(os.path.basename(model_path))[0]
+        self._owns_llm = llm is None
+        self._closed = False
+        self.llm = (lib.Llama(model_path=model_path, n_ctx=n_ctx, n_batch=n_batch, n_gpu_layers=n_gpu_layers,
+                              logits_all=False, verbose=verbose, **llama_kwargs) if llm is None else llm)
+        model_name = model_path or getattr(self.llm, "model_path", "llama")
+        self.name = name or os.path.splitext(os.path.basename(model_name))[0]
         self.n_ctx = int(lib.llama_n_ctx(self.llm.ctx))
         self.n_batch = int(lib.llama_n_batch(self.llm.ctx))
         self.n_vocab = int(self.llm.n_vocab())
@@ -108,6 +120,7 @@ class LlamaCppBackend:
         self.tokenizer = tokenizer if tokenizer is not None else GGUFTokenizer(self.llm)
         self._checked_ids: set = set()
         self._batch = lib.llama_batch_init(self.n_batch, 0, 1)
+        self._high_level_logits = _supports_high_level_logits(self.llm)
 
     # ---- token checks ------------------------------------------------------------
     def _prompt_tokens(self, prompt: str) -> List[int]:
@@ -147,6 +160,33 @@ class LlamaCppBackend:
         self._lib.llama_memory_clear(self._lib.llama_get_memory(self.llm.ctx), True)
 
     def _last_row_logits(self, tokens: List[int]) -> np.ndarray:
+        if self._high_level_logits:
+            return self._last_row_logits_high_level(tokens)
+        return self._last_row_logits_low_level(tokens)
+
+    def _last_row_logits_high_level(self, tokens: List[int]) -> np.ndarray:
+        self.llm.reset()
+        try:
+            self.llm.eval(tokens, copy_logits=True)
+
+            scores = np.asarray(self.llm.scores)
+
+            if scores.ndim == 1:
+                row = scores
+            elif scores.shape[0] == 1:
+                # (JamePeng) logits_all=False:
+                # scores[0] contains the final-token logits.
+                row = scores[0]
+            else:
+                # logits_all=True:
+                # scores are indexed by token position.
+                row = scores[self.llm.n_tokens - 1]
+
+            return np.array(row, dtype=np.float64, copy=True)
+        finally:
+            self.llm.reset()
+
+    def _last_row_logits_low_level(self, tokens: List[int]) -> np.ndarray:
         """Decode `tokens` from an empty cache and return the final position's logits
         (float64 copy). Only that one position is flagged for output."""
         lib, ctx, b = self._lib, self.llm.ctx, self._batch
@@ -181,11 +221,14 @@ class LlamaCppBackend:
         return out
 
     def close(self) -> None:
+        if getattr(self, "_closed", False):
+            return
+        self._closed = True
         if getattr(self, "_batch", None) is not None:
             self._lib.llama_batch_free(self._batch)
             self._batch = None
         llm = getattr(self, "llm", None)
-        if llm is not None and hasattr(llm, "close"):
+        if self._owns_llm and llm is not None and hasattr(llm, "close"):
             llm.close()
 
     def __del__(self):
@@ -193,3 +236,14 @@ class LlamaCppBackend:
             self.close()
         except Exception:
             pass
+
+
+def _supports_high_level_logits(llm: Any) -> bool:
+    """Detect the reset/eval/scores API without relying on a fork or version name."""
+    evaluate = getattr(llm, "eval", None)
+    if not callable(getattr(llm, "reset", None)) or not hasattr(llm, "scores") or not callable(evaluate):
+        return False
+    try:
+        return "copy_logits" in inspect.signature(evaluate).parameters
+    except (TypeError, ValueError):
+        return False

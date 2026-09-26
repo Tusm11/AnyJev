@@ -160,6 +160,100 @@ def test_full_vocab_logsoftmax_at_the_last_position(stub):
     assert stub.created[0].kwargs["logits_all"] is False
 
 
+def test_constructor_requires_exactly_one_model_source():
+    with pytest.raises(ValueError, match="exactly one"):
+        LlamaCppBackend()
+    with pytest.raises(ValueError, match="exactly one"):
+        LlamaCppBackend("m.gguf", llm=object())
+
+
+def test_borrowed_high_level_llama_is_reused_reset_and_not_closed(stub):
+    llm = StubLlama()
+    llm.scores = np.zeros((1, N_VOCAB), dtype=np.float32)
+    events = []
+
+    def reset():
+        events.append("reset")
+        llm.memory.clear()
+        llm.clears += 1
+
+    def evaluate(tokens, *, copy_logits=True):
+        events.append(("eval", copy_logits))
+        llm.scores[0] = reference_logits(tokens)
+
+    llm.reset = reset
+    llm.eval = evaluate
+    llm.close = lambda: events.append("close")
+    be = LlamaCppBackend(llm=llm)
+
+    out = be.next_token_logprobs(["hello"], [[_encode("A")[0]]])[0]
+    np.testing.assert_allclose(out, reference_logprobs("hello", [_encode("A")[0]]), atol=1e-6)
+    assert be._high_level_logits
+    assert events == ["reset", ("eval", True), "reset"]
+    assert llm.clears == 2
+    be.close()
+    be.close()
+    assert "close" not in events
+
+
+def test_borrowed_upstream_llama_uses_low_level_fallback_and_is_not_closed(stub):
+    llm = StubLlama()
+    closed = []
+    llm.close = lambda: closed.append(True)
+    be = LlamaCppBackend(llm=llm)
+
+    out = be.next_token_logprobs(["hello"], [[_encode("A")[0]]])[0]
+    assert not be._high_level_logits
+    np.testing.assert_allclose(out, reference_logprobs("hello", [_encode("A")[0]]), atol=1e-6)
+    be.close()
+    assert closed == []
+
+
+def test_borrowed_high_level_llama_resets_after_eval_error(stub):
+    llm = StubLlama()
+    llm.scores = np.zeros((1, N_VOCAB), dtype=np.float32)
+    resets = []
+    llm.reset = lambda: resets.append(True)
+
+    def evaluate(tokens, *, copy_logits=True):
+        raise RuntimeError("evaluation failed")
+
+    llm.eval = evaluate
+    be = LlamaCppBackend(llm=llm)
+    with pytest.raises(RuntimeError, match="evaluation failed"):
+        be._last_row_logits([20])
+    assert resets == [True, True]
+    be.close()
+
+
+def test_high_level_logits_all_selects_last_evaluated_row(stub):
+    llm = StubLlama()
+    llm.scores = np.full((64, N_VOCAB), -99, dtype=np.float32)
+    llm.n_tokens = 0
+    llm.reset = lambda: setattr(llm, "n_tokens", 0)
+
+    def evaluate(tokens, *, copy_logits=True):
+        llm.n_tokens = len(tokens)
+        llm.scores[len(tokens) - 1] = reference_logits(tokens)
+
+    llm.eval = evaluate
+    be = LlamaCppBackend(llm=llm)
+    out = be.next_token_logprobs(["hello"], [[_encode("A")[0]]])[0]
+    np.testing.assert_allclose(out, reference_logprobs("hello", [_encode("A")[0]]), atol=1e-6)
+    be.close()
+
+
+def test_owned_llama_is_closed_once_and_upstream_api_uses_fallback(stub):
+    be = LlamaCppBackend("m.gguf")
+    llm = stub.created[0]
+    closed = []
+    llm.close = lambda: closed.append(True)
+    assert not be._high_level_logits
+    be.close()
+    be.close()
+    assert closed == [True]
+
+
 def test_only_the_final_token_asks_for_logits_across_chunks(stub):
     be = LlamaCppBackend("m.gguf")                      # stub n_batch = 16
     prompt = "x" * 40                                   # 40 tokens: chunks of 16, 16, 8
