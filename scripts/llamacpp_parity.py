@@ -7,8 +7,22 @@ the llama.cpp side checks every prompt tokenizes identically in the GGUF (TokenM
 otherwise). Reports max |diff| of the full-vocabulary log-probs of the label tokens, of the
 log-softmax restricted to the labels, and argmax agreement over choice / noul / score prompts.
 For parity use an F32 GGUF converted from the same Hugging Face snapshot the HF side loads: an F16
-or quantized file also measures llama.cpp's reduced-precision compute (on Qwen2.5-0.5B the official
-F16 GGUF differs from fp32 transformers by up to ~1.2 nats, the F32 conversion by ~0.02).
+or quantized file also measures llama.cpp's reduced-precision compute. On Qwen2.5-0.5B-Instruct,
+15 choice/noul/score prompts, transformers fp32 on CPU (`bench/llamacpp_parity_f32.json`,
+`bench/llamacpp_parity_f16.json`):
+
+    GGUF                                    argmax   max |Δ logprob|   mean |Δ logprob|
+    F32, converted from the same snapshot    15/15    0.0159            0.0089
+    official Qwen/Qwen2.5-0.5B-Instruct-GGUF fp16  14/15    1.1692            0.7053
+
+The F16 gap is llama.cpp computing with F16 weights, not this backend: on the same F16 file the
+backend matches llama-cpp-python's own `Llama.eval(logits_all=True)` last row to max |Δ| 0.0002
+(15/15), and switching the KV cache to F32 changes the result by only 0.04.
+
+Windows: the default PyPI llama-cpp-python wheel is CPU-only and works; a prebuilt CUDA wheel
+from the project's own extra index has been reported to crash at context creation (`illegal
+instruction`, `WinError -1073741795`) on CPUs without AVX-512, which is most consumer CPUs. Use
+the default wheel, or build with `-DGGML_NATIVE=OFF`, if the CUDA wheel traps.
 """
 import argparse
 import json

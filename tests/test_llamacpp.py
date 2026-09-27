@@ -2,6 +2,7 @@
 engine smoke test on a real GGUF when llama-cpp-python and ANYJEV_GGUF are available."""
 import ctypes
 import hashlib
+import json
 import os
 import sys
 import types
@@ -123,13 +124,61 @@ def make_stub_module(**llama_defaults):
     lib.llama_get_logits_ith = llama_get_logits_ith
     lib.llama_get_memory = lambda ctx: ctx
     lib.llama_memory_clear = llama_memory_clear
+    lib.llama_chat_format = _make_fake_chat_format_module()
     return lib
+
+
+class _FakeChatFormatterResponse:
+    def __init__(self, prompt):
+        self.prompt = prompt
+
+
+def _make_fake_chat_format_module():
+    """Just enough of llama_cpp.llama_chat_format to test that GGUFTokenizer calls the real
+    thing correctly: a Jinja2ChatFormatter with the same sandboxing and the same pass-through
+    for HuggingFace's `{% generation %}` tag (`Jinja2ChatFormatter.IgnoreGenerationTags` in the
+    real module) that a bare sandboxed environment cannot parse."""
+    mod = types.ModuleType("llama_cpp.llama_chat_format")
+
+    class Jinja2ChatFormatter:
+        def __init__(self, template, bos_token, eos_token, add_generation_prompt=True):
+            from jinja2.ext import Extension, loopcontrols
+            from jinja2.sandbox import ImmutableSandboxedEnvironment
+
+            class IgnoreGenerationTags(Extension):
+                tags = {"generation"}
+
+                def parse(self, parser):
+                    parser.stream.skip(1)
+                    return parser.parse_statements(("name:endgeneration",), drop_needle=True)
+
+            self.bos_token, self.eos_token, self.add_generation_prompt = bos_token, eos_token, add_generation_prompt
+            env = ImmutableSandboxedEnvironment(trim_blocks=True, lstrip_blocks=True,
+                                                extensions=[IgnoreGenerationTags, loopcontrols])
+            env.filters["tojson"] = lambda x, **_: json.dumps(x, ensure_ascii=False)
+            self._template = env.from_string(template)
+
+        def __call__(self, *, messages, tools=None, functions=None, function_call=None,
+                     tool_choice=None, **kwargs):
+            def raise_exception(message):
+                raise ValueError(message)
+
+            text = self._template.render(
+                messages=messages, bos_token=self.bos_token, eos_token=self.eos_token,
+                add_generation_prompt=self.add_generation_prompt, raise_exception=raise_exception,
+                strftime_now=lambda fmt: "", tools=tools, functions=functions,
+                function_call=function_call, tool_choice=tool_choice, **kwargs)
+            return _FakeChatFormatterResponse(text)
+
+    mod.Jinja2ChatFormatter = Jinja2ChatFormatter
+    return mod
 
 
 @pytest.fixture
 def stub(monkeypatch):
     lib = make_stub_module()
     monkeypatch.setitem(sys.modules, "llama_cpp", lib)
+    monkeypatch.setitem(sys.modules, "llama_cpp.llama_chat_format", lib.llama_chat_format)
     return lib
 
 
@@ -221,16 +270,23 @@ def test_label_id_naming_different_text_is_refused(stub):
 
 def test_gguf_chat_template_is_rendered_like_transformers(monkeypatch):
     pytest.importorskip("jinja2")   # a llama-cpp-python dependency, not an anyjev one
-    tpl = ("{{ bos_token }}{% for m in messages %}<{{ m['role'] }}>{{ m['content'] }}\n{% endfor %}"
+    # {% generation %}...{% endgeneration %} is HuggingFace's assistant-span tag (used by e.g.
+    # SmolLM3's template); a bare sandboxed Jinja environment raises TemplateSyntaxError on it.
+    tpl = ("{{ bos_token }}{% for m in messages %}<{{ m['role'] }}>{% generation %}{{ m['content'] }}"
+           "{% endgeneration %}\n{% endfor %}"
            "{% if add_generation_prompt %}<assistant>{% if enable_thinking is defined and not enable_thinking %}"
            "<nothink>{% endif %}{% endif %}")
     lib = make_stub_module(metadata={"tokenizer.chat_template": tpl})
     monkeypatch.setitem(sys.modules, "llama_cpp", lib)
+    monkeypatch.setitem(sys.modules, "llama_cpp.llama_chat_format", lib.llama_chat_format)
     tok = LlamaCppBackend("m.gguf").tokenizer
     msgs = [{"role": "system", "content": "S"}, {"role": "user", "content": "U"}]
     out = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True, enable_thinking=False)
-    assert out == "<s><system>S\n<user>U\n<assistant><nothink>"
+    assert out == "<s><system>S<user>U<assistant><nothink>"
     assert tok.encode("AB") == _encode("AB")
+    # built once per add_generation_prompt value, not recompiled on every call
+    assert tok.apply_chat_template(msgs, add_generation_prompt=True) is not None
+    assert len(tok._formatters) == 1
 
 
 def test_decider_end_to_end_on_the_stub(monkeypatch):
@@ -241,15 +297,65 @@ def test_decider_end_to_end_on_the_stub(monkeypatch):
     dec = d.decide("My card was charged twice.", [q], level="L0")["route"]
     assert dec.level == "L0"
     assert abs(float(dec.probs.sum()) - 1.0) < 1e-9
-    assert stub.created[0].clears == 3                  # one forward per cyclic shift
+    # Not asserting an exact clears count here: it currently equals the number of cyclic
+    # shifts because there is no prefix reuse, but a follow-up adding shared-prefix scoring
+    # would legitimately lower it without this test needing to change.
 
 
-def test_old_llama_cpp_python_is_refused(monkeypatch):
+def test_llama_cpp_python_missing_a_required_symbol_is_refused(monkeypatch):
+    # A real pre-0.3.16 build lacks llama_get_memory regardless of its __version__ string, and
+    # the prebuilt CUDA/Metal wheels carry version strings ("0.3.16+cu124") that a naive
+    # int-only parse of __version__ used to reject even though every symbol is present. The
+    # fix checks the symbols directly instead of parsing the version string.
     lib = make_stub_module()
-    lib.__version__ = "0.3.2"
+    del lib.llama_get_memory
     monkeypatch.setitem(sys.modules, "llama_cpp", lib)
-    with pytest.raises(ImportError, match="llama-cpp-python>=0.3.16"):
+    with pytest.raises(ImportError, match="llama_get_memory"):
         LlamaCppBackend("m.gguf")
+
+
+def test_a_cu124_style_version_string_with_every_symbol_is_accepted(monkeypatch):
+    lib = make_stub_module()
+    lib.__version__ = "0.3.16+cu124"
+    monkeypatch.setitem(sys.modules, "llama_cpp", lib)
+    monkeypatch.setitem(sys.modules, "llama_cpp.llama_chat_format", lib.llama_chat_format)
+    LlamaCppBackend("m.gguf")   # does not raise
+
+
+def test_name_defaults_from_gguf_metadata_over_the_filename(monkeypatch):
+    # llama-quantize writes ggml-model-Q4_K_M.gguf for every model alike; two different
+    # quantized models in different directories would otherwise share that default name and
+    # silently accept each other's L1 artifact.
+    lib = make_stub_module(metadata={"general.basename": "phi3-mini-q4"})
+    monkeypatch.setitem(sys.modules, "llama_cpp", lib)
+    monkeypatch.setitem(sys.modules, "llama_cpp.llama_chat_format", lib.llama_chat_format)
+    be = LlamaCppBackend("models/ggml-model-Q4_K_M.gguf")
+    assert be.name == "phi3-mini-q4"
+    be2 = LlamaCppBackend("models/ggml-model-Q4_K_M.gguf", name="explicit")
+    assert be2.name == "explicit"
+
+
+def test_use_after_close_raises_instead_of_segfaulting(stub):
+    be = LlamaCppBackend("m.gguf")
+    be.close()
+    with pytest.raises(RuntimeError, match="closed"):
+        be.next_token_logprobs(["p"], [[20]])
+    be.close()   # idempotent
+
+
+def test_prompts_and_label_ids_length_mismatch_is_refused(stub):
+    be = LlamaCppBackend("m.gguf")
+    with pytest.raises(ValueError, match=r"3 prompts but 2 label-id lists"):
+        be.next_token_logprobs(["a", "b", "c"], [[20], [21]])
+
+
+def test_label_ids_may_be_a_generator_not_just_a_list(stub):
+    # ids used to be iterated twice (once by _check_label_ids, once to build the output index),
+    # so a generator was drained by the first pass and every prompt came back empty.
+    be = LlamaCppBackend("m.gguf")
+    a = _encode("A")[0]
+    out = be.next_token_logprobs(["hello"], [(i for i in [a])])
+    np.testing.assert_allclose(out[0], reference_logprobs("hello", [a]), atol=1e-6)
 
 
 @pytest.mark.engine
