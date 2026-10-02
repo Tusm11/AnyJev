@@ -217,6 +217,20 @@ Dated plan and help-wanted files: [ROADMAP.md](https://github.com/nokia-applied-
 
 Backends and bench providers are one file each; several are **help wanted** ([ROADMAP.md](https://github.com/nokia-applied-research/AnyJev/blob/main/ROADMAP.md), [CONTRIBUTING.md](https://github.com/nokia-applied-research/AnyJev/blob/main/CONTRIBUTING.md)). Changes: [CHANGELOG.md](https://github.com/nokia-applied-research/AnyJev/blob/main/CHANGELOG.md). Credits: [CREDITS.md](https://github.com/nokia-applied-research/AnyJev/blob/main/CREDITS.md).
 
+Technical Report:
+```bibtex
+@misc{zhang2026anyjevtechnicalreport,
+      title={AnyJev Technical Report}, 
+      author={Jiamu Zhang and Tianze Yang and Yucheng Shi and Evan Chen and Zixiang Nie and Kelly Wan and Liangjie Hong and Ninghao Liu and Liang Wu},
+      year={2026},
+      eprint={2610.00831},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2610.00831}, 
+}
+```
+
+Software:
 ```bibtex
 @software{anyjev2026,
   title  = {AnyJev: Turn any LLM into a Jev-style decision model},
