@@ -13,7 +13,7 @@ from anyjev.question import Question
 class Decision:
     question: Question
     probs: np.ndarray            # [K] over question.options, sums to 1
-    level: str                   # "raw" | "L0" | "L1" | "L2"  ("auto" is a request to decide(), never a result level)
+    level: str                   # "raw" | "L0"
     diagnostics: Dict[str, Any] = field(default_factory=dict)
 
     # ---- generic ------------------------------------------------------
@@ -54,7 +54,7 @@ class Decision:
 
     def require(self, level: str) -> "Decision":
         """Raise LevelError unless this decision carries at least `level`. Lets downstream
-        code refuse to act on an L0 probability where it needs an L1 one."""
+        code refuse to act on a raw probability where it needs a debiased (L0) one."""
         return require_level(self, level)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -77,7 +77,7 @@ class Decision:
         return f"Decision({self.question.id}: {self.answer!r}, conf={self.confidence:.3f}, level={self.level})"
 
 
-LEVEL_ORDER = {"raw": 0, "L0": 1, "L1": 2, "L2": 3}
+LEVEL_ORDER = {"raw": 0, "L0": 1}
 
 
 class LevelError(ValueError):
@@ -90,7 +90,7 @@ def require_level(decision: "Decision", level: str) -> "Decision":
     if LEVEL_ORDER[decision.level] < LEVEL_ORDER[level]:
         raise LevelError(
             f"question {decision.question.id!r} is at level {decision.level}, caller requires {level}; "
-            + ("calibrate() it first" if level == "L1" else "decide() at a higher level")
+            "decide() at a higher level"
         )
     return decision
 

@@ -1,21 +1,25 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/nokia-applied-research/AnyJev/main/assets/banner.png" width="100%" alt="AnyJev — turn any LLM into a Jev-style decision model. Typed decisions, real probabilities, no fine-tuning. Order-flip rate 0.230 to 0.073 with zero labels; calibration error 0.240 to 0.095 and auto-decidable at 5% risk 7.7% to 52.0% with 100 to 500 labels.">
+<img src="https://raw.githubusercontent.com/nokia-applied-research/AnyJev/main/assets/banner.png" width="100%" alt="AnyJev: turn any LLM into a Jev-style decision model. Typed decisions, real probabilities, training-free or self-distilled. Qwen3-8B on BANKING77-20, raw readout to L0 with no labels: order-flip rate 0.230 to 0.073, accuracy 0.747 to 0.803, auto-decidable at 5% risk 7.7% to 46.3%.">
 
 [![PyPI](https://img.shields.io/pypi/v/anyjev?color=3b82f6)](https://pypi.org/project/anyjev/)
 [![Python](https://img.shields.io/pypi/pyversions/anyjev)](https://pypi.org/project/anyjev/)
 [![CI](https://github.com/nokia-applied-research/AnyJev/actions/workflows/ci.yml/badge.svg)](https://github.com/nokia-applied-research/AnyJev/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](https://github.com/nokia-applied-research/AnyJev/blob/main/LICENSE)
+[![Technical Report](https://img.shields.io/badge/Technical%20Report-PDF-b31b1b?logo=adobeacrobatreader&logoColor=white)](https://arxiv.org/pdf/2610.00831)
+[![Models](https://img.shields.io/badge/%F0%9F%A4%97%20Tacit-models-yellow)](https://huggingface.co/collections/morriszjm/tacit-6ac41d0b50af9e5417c5c234)
 
-**English** · [简体中文](https://github.com/nokia-applied-research/AnyJev/blob/main/README.zh-CN.md) · [⚡ Serve it](#-serve-it) · [📊 Results](#-with-labels-l2) · [🧭 Roadmap](#-roadmap) · [📖 Levels](https://github.com/nokia-applied-research/AnyJev/blob/main/docs/levels.md)
+**English** · [简体中文](https://github.com/nokia-applied-research/AnyJev/blob/main/README.zh-CN.md) · [⚡ Serve it](#-serve-it) · [📊 Results](#-tacit-results) · [🧭 Roadmap](#-roadmap) · [📖 Levels](https://github.com/nokia-applied-research/AnyJev/blob/main/docs/levels.md)
 
 </div>
 
 <p align="center">
-  <b>Jiamu Zhang</b><sup>1</sup> &nbsp;&nbsp;&nbsp; <b>Tianze Yang</b><sup>1</sup> &nbsp;&nbsp;&nbsp; <b>Yucheng Shi</b><sup>2</sup> &nbsp;&nbsp;&nbsp; <b>Liang Wu</b><sup>1</sup>
+  <b>Jiamu Zhang</b><sup>1</sup> &nbsp;&nbsp;&nbsp; <b>Tianze Yang</b><sup>1</sup> &nbsp;&nbsp;&nbsp; <b>Yucheng Shi</b><sup>2</sup> &nbsp;&nbsp;&nbsp; <b>Evan Chen</b><sup>1</sup>
+  <br>
+  <b>Zixiang Nie</b><sup>1</sup> &nbsp;&nbsp;&nbsp; <b>Kelly Wan</b><sup>1</sup> &nbsp;&nbsp;&nbsp; <b>Liangjie Hong</b><sup>1</sup> &nbsp;&nbsp;&nbsp; <b>Ninghao Liu</b><sup>3</sup> &nbsp;&nbsp;&nbsp; <b>Liang Wu</b><sup>1</sup>
 </p>
 <p align="center">
-  <sub><sup>1</sup>&nbsp;Nokia, Sunnyvale, CA &nbsp;&nbsp;&nbsp;&nbsp; <sup>2</sup>&nbsp;Tencent Hunyuan</sub>
+  <sub><sup>1</sup>&nbsp;Nokia, Sunnyvale, CA, USA &nbsp;&nbsp;&nbsp;&nbsp; <sup>2</sup>&nbsp;Tencent Hunyuan &nbsp;&nbsp;&nbsp;&nbsp; <sup>3</sup>&nbsp;The Hong Kong Polytechnic University</sub>
 </p>
 
 <p align="center">
@@ -25,197 +29,189 @@
 </p>
 
 > [!TIP]
-> **🆕 vLLM serves every level, L2 included.** An embed server's pooler hands back the hidden
-> state a closed-form head reads, so a decision endpoint is a pooling server plus a few
-> kilobytes of head. `python -m anyjev.pipeline <model>` converts, serves and measures in one
-> command. [Start here ↓](#-serve-it)
-
+> **🆕 Tacit: AnyJev's self-distilled models, 1.7B to 9B, are on
+> [Hugging Face](https://huggingface.co/collections/morriszjm/tacit-6ac41d0b50af9e5417c5c234).** One
+> forward pass per decision. With `adaptive=True`, a capped share of low-confidence decisions goes to
+> the model's own reasoning. They run on transformers, in-process vLLM or a stock `vllm serve`.
+> `pip install "anyjev[hf]"`, then `Tacit.from_pretrained("morriszjm/Tacit-9B")`.
+> [Start here ↓](#-serve-it)
 
 ## ⚡ Serve it
 
-Three commands take a model off the Hub and put a calibrated decision endpoint in front of it.
+**A Tacit model, in Python.**
+
+```python
+from anyjev import Tacit
+
+tacit = Tacit.from_pretrained("morriszjm/Tacit-9B")          # transformers, one GPU
+d = tacit.decide(state="Customer: my package was due last Monday and it still has not arrived.",
+                 question="What does the customer want?",
+                 options=["track_order", "cancel_order", "refund", "change_address"])
+d["answer"], d["probs"], d["route"]    # an option, {option: probability}, "one_forward" or "cot"
+```
+
+`kind` is `"choice"` (default), `"yes_no"` or `"score"` (`options` are ordered levels, lowest
+first). `decide_batch([...])` takes a list of such dicts.
+
+**Send the hardest decisions to reasoning, with a cap.**
+
+```python
+tacit = Tacit.from_pretrained("morriszjm/Tacit-9B", adaptive=True, tau=0.5, max_cot_share=0.2, cot_window=1000)
+```
+
+A decision whose top two options are less than `tau` apart in log-probability is answered again with
+thinking on. After the reasoning, the answer is read as a label distribution, so it also has
+probabilities and cannot fail to parse. At most `max_cot_share` of the last `cot_window` decisions
+escalate, however hard the traffic gets. Every escalation is reported (`route == "cot"`, with the
+first pass kept), and `tacit.stats` counts them.
+
+**On vLLM.** A stock server; the client needs only the tokenizer.
 
 ```bash
-pip install "anyjev[hf]"
-
-# 1. keep the blocks a decision needs — usually about two thirds
-python -m anyjev.truncate Qwen/Qwen2.5-7B-Instruct 18 ./qwen-b18
-
-# 2. serve it. L2 reads a hidden state, so the pooler hands one back untouched
-vllm serve ./qwen-b18 --task embed \
-  --override-pooler-config '{"pooling_type":"LAST","normalize":false,"softmax":false}'
+pip install "anyjev[client]"
+vllm serve morriszjm/Tacit-9B --host 127.0.0.1 --port 8000
 ```
+
+```python
+tacit = Tacit.from_pretrained("morriszjm/Tacit-9B", engine="server",
+                              base_url="http://127.0.0.1:8000", adaptive=True)
+```
+
+`engine="vllm"` (`pip install "anyjev[vllm]"`) runs vLLM in the same process instead.
+
+**An HTTP endpoint for many clients sharing one cap.**
+
+```bash
+python -m anyjev.serve --model morriszjm/Tacit-9B --upstream http://127.0.0.1:8000 --adaptive --port 8100
+curl -s 127.0.0.1:8100/v1/decide -H 'Content-Type: application/json' \
+  -d '{"state": "Customer: my package has not arrived.", "question": "What does the customer want?", "options": ["track_order", "refund"]}'
+```
+
+`POST /v1/decide` takes one decision or `{"items": [...]}`; `GET /v1/stats` reports the escalation
+share. The gateway listens on 127.0.0.1 and has no authentication of its own.
+
+| argument | default | meaning |
+|---|---|---|
+| `adaptive` | `False` | send low-confidence decisions to the model's own reasoning |
+| `tau` | `0.5` | low confidence: the log-probability gap between the top two options is below `tau` |
+| `max_cot_share` | `0.2` | at most this share of the last `cot_window` decisions escalates; `None` removes the cap |
+| `cot_window` | `1000` | how many recent decisions the cap counts; `None` counts every decision since loading |
+| `cot_max_tokens` | `8192` | reasoning budget of one decision |
+| `engine` | `"transformers"` | `"vllm"` runs vLLM in this process; `"server"` uses a running `vllm serve` at `base_url` |
+
+**Any other model, training-free.** The `Decider` reads the same typed decisions from any open
+causal LM, with no training and no labels.
 
 ```python
 from anyjev import Decider, Question
-from anyjev.backends.vllm import VLLMBackend
+from anyjev.backends.hf import HFBackend          # or anyjev.backends.vllm.VLLMBackend(url, model)
 
-d = Decider(VLLMBackend("http://localhost:8000", "./qwen-b18"), level="L2")
+d = Decider(HFBackend("Qwen/Qwen3-8B"))           # level="L0" by default
 route = Question.choice("Which team should handle this?",
                         ["billing", "technical", "sales", "other"], name="route")
-
-d.fit_head(route, states, labels, layers=[-1])   # 100–300 labels, one closed-form solve
-d.decide(ticket, [route])["route"].distribution  # {"billing": 0.81, "technical": 0.07, ...}
+r = d.decide("My card was charged twice for one order.", [route])["route"]
+r.distribution, r.level                           # {option: probability}, "L0"
 ```
 
-**Without labels, turn on the rotation budget — recommended for any K-option `choice`.** L0 asks the
-model once per option rotation so that no option is favoured by its position. Most decisions do not need
-all K: read them one at a time, stop when the leader is far enough ahead, and the threshold can be
-calibrated so the answer matches the full cycle's a stated fraction of the time — measured against
-**our own full-strength readout, so it needs no labels at all.**
+L0 reads a K-option choice once per rotation of the options. With the **rotation budget**, it reads
+only as many rotations as the decision needs:
 
 ```python
-d = Decider(VLLMBackend("http://localhost:8000", "./qwen-b18"), adaptive_shifts=True)
+d = Decider(backend, adaptive_shifts=True, canonical_order=True)
 d.calibrate_adaptive(route, unlabelled_tickets, target=0.01)   # a few hundred states, no labels
-d.decide_batch(tickets, route)      # diagnostics: shifts_used, stop_threshold
 ```
 
-7.2 rotations instead of 18 at a certified 1% disagreement rate, **2.2× the decisions per second on
-vLLM and 2.3×–2.7× on the transformers backend**, accuracy unchanged
-([docs/rotation_budget.md](docs/rotation_budget.md)). It is opt-in in 0.2.0 only because the tables in
-`docs/` were measured before it existed; it becomes the default when they are regenerated.
-
-**An L2 deployment is a pooling server plus a few kilobytes of head.** No logits, no parsing, no
-patched engine, and nothing generated. raw / L0 / L1 run the same way against a `--task generate`
-server. A head fit through `transformers` and served by vLLM answers the same as one fit and
-served on either alone — 99.0% identical answers, mean |dp| 0.0011 on BANKING77-20.
-
-**Measure it on your own box instead of trusting ours:**
-
-```bash
-python -m anyjev.pipeline Qwen/Qwen2.5-7B-Instruct --labels-from banking20
-```
-
-That truncates, serves, fits a head, measures accuracy, ECE and ms per decision on held-out
-states, shuts the server down, and repeats at full depth so there is something to compare
-against. Timings are a median over `--repeats` passes with the spread printed next to them,
-because on a shared machine a single pass can report the same configuration as both faster and
-slower than the baseline.
-
-> **Depth is usually a gain, not a trade.** Cutting Qwen2.5-7B from 28 blocks to 18 left accuracy
-> slightly *higher* and calibration better, and was faster: a middle block is a better feature
-> space for a linear head than the last one, where the remaining blocks are busy turning the
-> answer into tokens. `--quantization fp8` is available and not recommended — it buys
-> single-question latency and costs accuracy.
+The stopping threshold is calibrated against our own full-cycle answer, so it needs no labels. At a
+certified 1% disagreement it read 7.2 rotations instead of 18. That was 2.2× the decisions per second
+on vLLM and 2.3×–2.7× on transformers, with accuracy unchanged
+([docs/rotation_budget.md](https://github.com/nokia-applied-research/AnyJev/blob/main/docs/rotation_budget.md)).
 
 ## ✨ What it is
 
-Ask any open LLM a **typed question** — a choice, a yes/no, a score — and get a **decision with a
-probability you can threshold**, read from one prefill of its next-token distribution. Nothing is
-generated and nothing is parsed. Raw logits change their answer when you reorder the options and
-their confidence cannot be trusted; AnyJev fixes the first with zero labels and the second with a
-few hundred.
+Give the model a state and a **typed question** (a choice, a yes/no or a score). You get back a
+**decision with a probability over the options**, read from the model's next-token distribution.
+Nothing is parsed. There are two ways in:
+
+- **AnyJev Training-Free (`Decider`)** works on any open LLM, with no training. Raw label logits
+  change their answer when the options are reordered and carry the model's preference for some
+  labels. L0 removes both without a single label.
+- **AnyJev Self-Distilled (`Tacit`)** uses the Tacit checkpoints. They are trained by
+  self-distillation: the model learns to give, in one forward pass, the answers it reaches when it
+  reasons. No human labels and no other model are involved. One prefill per decision; with
+  `adaptive=True`, a capped share of decisions goes to reasoning.
 
 <div align="center">
 
-| | ⚪&nbsp;raw&nbsp;logits | 🔵&nbsp;**L0**<br><sub>zero labels</sub> | 🟢&nbsp;**L1**<br><sub>+ temperature</sub> |
-|:--|:--:|:--:|:--:|
-| Labels required | none | **none** | 100–500 |
-| Answer flips when options are reversed | 0.230 | **0.073** | 0.077 |
-| Accuracy | 0.747 | **0.803** | 0.807 |
-| Calibration error (ECE) | 0.240 | 0.184 | **0.095** |
-| **Auto-decidable at ≤5% error** | **7.7%** | **46.3%** | **52.0%** |
+| | ⚪&nbsp;raw&nbsp;logits | 🔵&nbsp;**L0**<br><sub>zero labels</sub> |
+|:--|:--:|:--:|
+| Labels required | none | **none** |
+| Answer flips when options are reversed | 0.230 | **0.073** |
+| Accuracy | 0.747 | **0.803** |
+| Calibration error (ECE) | 0.240 | **0.184** |
+| **Auto-decidable at ≤5% error** | **7.7%** | **46.3%** |
 
-<sub>Qwen3-8B, BANKING77 20-way, 300 test items · <a href="docs/results_bench.md">every ablation</a></sub>
+<sub>Qwen3-8B, BANKING77 20-way, 300 test items · `bench/results_v01/2026-09-22/Qwen__Qwen3-8B.json`</sub>
 
 </div>
 
-The last row is the point: accuracy moves six points, but the share of traffic you can safely
-automate goes **7.7% → 52.0%**. With raw logits a "0.9" is not trustworthy enough to act on, so
-everything goes to a human. Once the probability means what it says, you can set a threshold.
+The last row matters most. Accuracy moves six points, but the share of decisions confident enough to
+automate at ≤5% error goes from **7.7% to 46.3%**, with no labels at all.
 
-## 📊 With labels: L2
-
-A closed-form head per question, solved on 100–300 labels in seconds — no gradients, the model's
-weights untouched — and read from one prompt stopped partway down.
+## 📊 Tacit results
 
 <div align="center">
 
-| model | L0, zero labels | **L2** | block | cost vs one forward |
-|:--|:--:|:--:|:--:|:--:|
-| Qwen3-1.7B | 0.494 | **0.730** | 18 / 28 | 0.70× |
-| Qwen3-4B | 0.564 | **0.786** | 24 / 36 | 0.69× |
-| Qwen3-8B | 0.647 | **0.771** | 24 / 36 | 0.68× |
-| Qwen3-30B-A3B | 0.630 | **0.799** | 40 / 48 | — |
-| Qwen3-32B | 0.700 | **0.798** | 52 / 64 | 0.84× |
+| model | base | JevBench public (231) | bev-decision test (46,320) |
+|:--|:--|:--:|:--:|
+| [Tacit-9B](https://huggingface.co/morriszjm/Tacit-9B) | Qwen3.5-9B | **0.823** | **0.725** |
+| [Tacit-8B](https://huggingface.co/morriszjm/Tacit-8B) | Qwen3-8B | 0.749 | 0.662 |
+| [Tacit-4B](https://huggingface.co/morriszjm/Tacit-4B) | Qwen3-4B | 0.723 | 0.663 |
+| [Tacit-2B](https://huggingface.co/morriszjm/Tacit-2B) | Qwen3.5-2B | 0.671 | 0.626 |
+| [Tacit-1.7B](https://huggingface.co/morriszjm/Tacit-1.7B) | Qwen3-1.7B | 0.623 | 0.598 |
 
-<sub>LocalLLaMA/typed-decisions, 20 questions × 300 labels, 2,000 held-out decisions. Pooled ECE
-0.03–0.05. Jev 0.727 and fine-tuned Laya 0.768 on the same set, as published by their authors ·
-<a href="docs/results_exit.md">every cell</a></sub>
+<sub>Accuracy with one forward pass per decision (`adaptive=False`), the options in the benchmark's
+order, on every item of both test sets ([JevBench](https://github.com/fstandhartinger/jevbench) public
+set; [bev-decision](https://huggingface.co/datasets/avbiswas/bev-decision) test split) ·
+`bench/results_tacit/2026-10-05/one_forward.json`</sub>
 
 </div>
 
-A 1.7B at 64% of its depth reaches the number Jev publishes; a 4B ties the fine-tuned 421M Laya.
-**100 labels** already put the 8B head at 0.740. Heads for five Qwen3 models ship in
-`anyjev-heads/`, 23 heads per model in one 1.8–4.4 MB file.
+Results with escalation (`adaptive=True`) will be published together with the evaluation harness.
 
-**A head maintains itself.** Only its feature mean and scale move afterwards, re-estimated from
-**unlabelled** traffic, so it follows its question across rewordings and option orders on its own
-— a reworded question drops the Qwen3-8B head from 0.77 to 0.65–0.70 and **30 unlabelled
-requests** bring it back to 0.74–0.75, against 0.77 for a full relabelled refit. New labels are
-needed only for a new question. [How the routing works →](https://github.com/nokia-applied-research/AnyJev/blob/main/docs/method_v3.md)
-
-## 🧠 The levels
+## 🧠 How it works
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/nokia-applied-research/AnyJev/main/assets/how_it_works.png" width="100%" alt="How one decision is read: ask a typed question, read it over every cyclic shift of the options, divide out the label prior estimated without labels, and return a decision that carries its level">
 </p>
 
-| Level | Needs | Does | Does **not** |
+| | needs | does | does **not** |
 |---|---|---|---|
-| `raw` | nothing | restricted softmax over label tokens | anything about bias or calibration |
-| `L0` | nothing | averages position bias out over the K rotations, divides out the label prior | calibrate the uncertainty |
-| `L1` | 100–500 labels per question | temperature scaling on top of L0 | change the ranking |
-| **`L2`** | **100–300 labels per question** | **a closed-form head on the hidden state partway down, one prompt per state** | **transfer to another question or model** |
+| `raw` | nothing | one prompt, softmax restricted to the option labels | correct order or label bias |
+| `L0` | nothing | averages position bias out over the K rotations, divides out the label prior | calibrate against labels |
+| Tacit `one_forward` | a Tacit checkpoint | one prompt, read like `raw` from a model trained to answer in one pass | correct order bias |
+| Tacit `cot` | `adaptive=True` | reasons first, then reads the label distribution after the thought | run beyond its cap |
 
-Every `Decision` carries its `level`, and `require="L1"` makes downstream code refuse to act on a
-weaker one. L0 costs K prefills for a K-option choice, or about 7 of 18 with the rotation budget on (`adaptive_shifts=True`, recommended — see [Serve it](#-serve-it)). **L2 costs less than one plain forward**.
+Every `Decision` carries its `level`, and `require="L0"` makes downstream code refuse a weaker one.
+Every Tacit decision carries its `route`.
+[The contract in full →](https://github.com/nokia-applied-research/AnyJev/blob/main/docs/levels.md)
 
-`d.observe(q, state, label)` collects labels as they arrive and solves the head by itself at 30,
-re-solving at 60, 120, … so day 0 runs at L0 with nothing and L2 arrives when the loop has fed it.
-[The contract in full →](https://github.com/nokia-applied-research/AnyJev/blob/main/docs/levels.md) · [the method →](https://github.com/nokia-applied-research/AnyJev/blob/main/docs/method_v3.md)
-
-**No GPU handy?** `python -m demo.jev_mode --backend fake` runs the whole thing on a synthetic
-model in under a second.
-
-<p align="center"><sub>
-<a href="docs/jev_mode.md">Jev mode</a> ·
-<a href="demo/games/README.md">2048 and Minesweeper</a> ·
-<a href="docs/results_maze.md">NanoJev maze</a> ·
-<a href="docs/when_l0_helps.md">when L0 helps</a> ·
-<a href="docs/results_small_models.md">small models</a> ·
-<a href="docs/research_log.md">research log, negative results included</a>
-</sub></p>
-
-<sub>Every number is regenerated from committed JSON (`bash scripts/regen_docs.sh`); a second run
-from a clean checkout reproduced every zero-label number bit for bit. Not affiliated with TypeSafe
-AI or Jev; rows published by their authors were not rerun here.</sub>
+<sub>Every number in this README is read from committed JSON. Not affiliated with TypeSafe AI or Jev.</sub>
 
 ## 🧭 Roadmap
 
-- [x] `choice`, `noul` and `score` from one prefill; L0 with zero labels; L1 artifacts
-- [x] **L2**: a closed-form head per question, routing, label-free adaptation, `observe`
-- [x] Shipped heads for five Qwen3 models; a packaged demo
-- [ ] 🚧 **Speed optimization** *(ongoing)*: making every decision cheaper
-- [x] **L2 on served engines**: vLLM, through an embed server's pooler or a truncated checkpoint (`anyjev.pipeline`, `anyjev.truncate`); SGLang not yet
-- [ ] **Agent-loop evaluation**: the same decisions inside a real agent, against the LLM they replace
-- [ ] Heads on the Hugging Face Hub, an interactive Space, a technical report
-- [ ] More models (Llama, Gemma, Mistral, DeepSeek), span readout beyond 26 options, conformal abstention
+- [x] `choice`, `noul` and `score` from one prefill; L0 with zero labels
+- [x] The rotation budget: L0 at about 7 of 18 rotations, with a stopping threshold certified without labels
+- [x] **Tacit-1.7B, 2B, 4B, 8B and 9B** on Hugging Face; `Tacit` in the library on transformers, vLLM and `vllm serve`, with capped escalation to reasoning and an HTTP gateway
+- [ ] 🚧 Results with escalation on JevBench and bev-decision, released with the evaluation harness
+- [ ] 🚧 Label-free early exit: read a decision from part of the model's depth, choosing the depth by agreement with the full model
+- [ ] **Agent-loop evaluation**: the same decisions inside a real agent
+- [ ] More log-prob backends (SGLang, llama.cpp, MLX, Ollama), span readout beyond 26 options
 
-Dated plan and help-wanted files: [ROADMAP.md](https://github.com/nokia-applied-research/AnyJev/blob/main/ROADMAP.md).
-
-## 🔍 Limitations
-
-- **On typed-decisions, "accuracy" is agreement with a teacher LLM.** The gold is the mean of three samples of one model; a fresh sample of that teacher agrees with it 0.735 of the time.
-- **L2 is per question and per model.** Heads fit on other questions do not help a new one, and only Qwen3 heads ship. It needs hidden states, which transformers and a vLLM embed server both provide; other engines do not yet.
-- **Calibration cannot fix a model that cannot answer.** On maze edges and Minesweeper no readout beats the trivial baseline.
-- **L0 is not a free win everywhere.** The batch prior costs accuracy when one label dominates ([when L0 helps](https://github.com/nokia-applied-research/AnyJev/blob/main/docs/when_l0_helps.md)).
-
-<sub>Also: at most 26 options in the letter readout (a span readout is on the roadmap, not in the code); coverage at 5% risk is a high-variance estimate at n = 300; the headline tables are Qwen models; every decision here is scored in isolation, not inside an agent loop.</sub>
+Dated plan and help-wanted files: [ROADMAP.md](https://github.com/nokia-applied-research/AnyJev/blob/main/ROADMAP.md). Known limitations: [docs/limitations.md](https://github.com/nokia-applied-research/AnyJev/blob/main/docs/limitations.md).
 
 ## 🤝 Contributing and citation
 
-Backends and bench providers are one file each; several are **help wanted** ([ROADMAP.md](https://github.com/nokia-applied-research/AnyJev/blob/main/ROADMAP.md), [CONTRIBUTING.md](https://github.com/nokia-applied-research/AnyJev/blob/main/CONTRIBUTING.md)). Changes: [CHANGELOG.md](https://github.com/nokia-applied-research/AnyJev/blob/main/CHANGELOG.md). Credits: [CREDITS.md](https://github.com/nokia-applied-research/AnyJev/blob/main/CREDITS.md).
+Backends are one file each, and several are **help wanted** ([ROADMAP.md](https://github.com/nokia-applied-research/AnyJev/blob/main/ROADMAP.md), [CONTRIBUTING.md](https://github.com/nokia-applied-research/AnyJev/blob/main/CONTRIBUTING.md)). Changes: [CHANGELOG.md](https://github.com/nokia-applied-research/AnyJev/blob/main/CHANGELOG.md). Credits: [CREDITS.md](https://github.com/nokia-applied-research/AnyJev/blob/main/CREDITS.md).
 
 Technical Report:
 ```bibtex
@@ -240,4 +236,4 @@ Software:
 }
 ```
 
-Apache-2.0, see [LICENSE](https://github.com/nokia-applied-research/AnyJev/blob/main/LICENSE). Datasets keep their own licenses, see [THIRD_PARTY.md](https://github.com/nokia-applied-research/AnyJev/blob/main/THIRD_PARTY.md).
+Apache-2.0, see [LICENSE](https://github.com/nokia-applied-research/AnyJev/blob/main/LICENSE). The Tacit models carry their base models' Apache-2.0 license. Datasets keep their own licenses, see [THIRD_PARTY.md](https://github.com/nokia-applied-research/AnyJev/blob/main/THIRD_PARTY.md).

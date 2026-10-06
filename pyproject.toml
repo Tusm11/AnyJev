@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anyjev"
-version = "0.2.0"
-description = "AnyJev: turn an open LLM into a Jev-style decision model: typed decisions with calibrated probabilities, training-free by default. Not affiliated with TypeSafe AI."
+version = "0.3.0"
+description = "AnyJev: Jev-style typed decisions with probabilities from open LLMs: a training-free readout of any model, and the self-distilled Tacit models. Not affiliated with TypeSafe AI."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -16,7 +16,7 @@ authors = [
     { name = "Yucheng Shi" },
     { name = "Liang Wu" },
 ]
-keywords = ["llm", "decision", "calibration", "jev", "system-one"]
+keywords = ["llm", "decision", "calibration", "jev", "system-one", "self-distillation", "vllm"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
@@ -31,7 +31,9 @@ dependencies = ["numpy>=1.24"]
 
 [project.optional-dependencies]
 hf = ["torch>=2.3", "transformers>=4.53"]
-bench = ["datasets>=2.20", "scikit-learn>=1.4"]
+vllm = ["vllm>=0.17.1"]
+# a client of a running `vllm serve` (engine="server", python -m anyjev.serve) needs only the tokenizer
+client = ["transformers>=4.53"]
 dev = ["pytest>=8", "ruff"]
 
 [project.urls]

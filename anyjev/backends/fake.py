@@ -71,7 +71,7 @@ class FakeBackend:
     content is 0 on content-free probes, so the prior is exactly the bias term. `n` is a hashed
     standard normal per (state, option, position), applied to real states only; it is what the
     output layer sees but the planted hidden state does not (dims 38:50 of `_last_vector` carry
-    a clean code of the right option), so with `logit_noise > 0` a head fit on the hidden state
+    a clean code of the right option), so with `logit_noise > 0` a reader of the hidden state
     can beat L0, which averages only part of the noise out over the cyclic shifts.
 
     `wording_shift = a` applies a per-feature affine map to the last-position hidden state,
@@ -137,9 +137,7 @@ class FakeBackend:
     def _last_vector(self, state: str, labels: List[str], options: List[str]) -> np.ndarray:
         """Last-position state: dims [0:26] carry only the position bias and label prior of each
         position (no content), dims [26:38] a hash embedding of the state, dims [38:50] a hash
-        embedding of the option with the largest content. A head fit on this vector for one
-        question can only memorise that question's option vocabulary, which is exactly why a
-        per-question head does not transfer while the option-line head (`_option_vector`) can."""
+        embedding of the option with the largest content."""
         h = np.zeros(self.hidden_size)
         for j, lab in enumerate(labels):
             z = self.position_bias[j] if j < len(self.position_bias) else 0.0
@@ -163,8 +161,8 @@ class FakeBackend:
 
     def _option_vector(self, state: str, j: int, option: str) -> np.ndarray:
         """Option-line state for the option shown at position j: content along a fixed direction
-        (the rule a universal head can recover on unseen questions), the position bias along another,
-        plus a hash embedding of the option text (what a per-question head can memorise)."""
+        (a rule that holds across questions), the position bias along another,
+        plus a hash embedding of the option text (specific to the question)."""
         z = 0.0 if state in DEFAULT_PROBES else self.content(state, option)
         bias = self.position_bias[j] if j < len(self.position_bias) else 0.0
         g = z * self._u + bias * self._v

@@ -1,5 +1,5 @@
 """Quick real-model smoke: the README example on one small model.
-    python scripts_smoke.py Qwen/Qwen3-8B
+    python scripts/smoke.py Qwen/Qwen3-8B
 """
 import json
 import sys

@@ -1,10 +1,9 @@
 """Write a model with its last blocks removed, so every runtime can serve a truncated forward.
 
-A decision does not need the whole model. On typed-decisions a closed-form head is flat from
-about two thirds of the depth, and the blocks above that are converting the answer into token
-space rather than deciding anything. Skipping them is the one efficiency lever that is linear
-in cost and costs almost no accuracy -- but only the local `transformers` path can stop a
-forward early, and an inference server cannot be asked to run "most of" a model.
+A decision often does not need the whole model: the last blocks mostly convert an answer the
+model has already formed into token space. Skipping them is the one efficiency lever that is
+linear in cost -- but only the local `transformers` path can stop a forward early, and an
+inference server cannot be asked to run "most of" a model.
 
 So do it on disk instead. `truncate(model, blocks, out)` writes a normal checkpoint that simply
 has fewer layers: `config.json` with `num_hidden_layers = blocks`, the tensors of those blocks,
@@ -14,10 +13,11 @@ special object, it is a smaller model.
 
     python -m anyjev.truncate Qwen/Qwen2.5-7B-Instruct 18 /models/qwen2.5-7b-b18
 
-**The head must be fit on the model it is served by.** A truncated model applies its final norm
-after the last block it kept, so its output vector is `norm(h_b)`, while `HFBackend` captures
-`h_b` itself at an intermediate block. Those are different spaces, and a head moved between
-them silently reads the wrong one. Fit against whichever artifact you will deploy.
+**Read the state of the model you serve.** A truncated model applies its final norm after the
+last block it kept, so its output vector is `norm(h_b)`, while `HFBackend` captures `h_b` itself
+at an intermediate block. Those are different spaces, and anything fitted on one of them (a map
+into the final basis, a probe) silently reads the wrong one if moved to the other. Fit against
+whichever artifact you will deploy.
 """
 from __future__ import annotations
 

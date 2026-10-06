@@ -179,8 +179,7 @@ class HFBackend:
         the longest list) or None when `positions` is None. `layers` index the transformer's
         hidden-state tuple: 0 is the embedding output, i the output of block i, and the last entry
         (num_hidden_layers) is after the final norm, i.e. exactly what the lm_head reads; a
-        negative index counts from that end. These are the features the closed-form heads in
-        `anyjev.heads` are fit on."""
+        negative index counts from that end."""
         import torch
 
         n_blocks = int(self.model.config.num_hidden_layers)

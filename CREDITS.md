@@ -2,12 +2,12 @@
 
 AnyJev stands on other people's work. Attribution lives here, not in identifiers.
 
-## Projects we run, adapt to, or compare against
+## Projects we build on
 
-- **TypeSafe AI, Jev** — the product that defined the interface (state, typed questions, calibrated answers in one pass). Not affiliated; their published numbers appear in our tables clearly marked as published, never as measured by us.
-- **Laya** (NandhaKishorM/laya, Apache-2.0) — open trained decision models; we run their three checkpoints through their own `predict` API on LocalLLaMA/typed-decisions (`bench/providers/laya.py`).
-- **NanoJev** (TianyuCodings/NanoJev, MIT) — nano replica with games; we run their frozen maze exploration code and their own untuned-Qwen baseline script (`bench/providers/nanojev_maze.py`, `bench/providers/nanojev_native_maze.py`) and their released episode data.
-- **LocalLLaMA/typed-decisions** (Apache-2.0) — the 400-case, 2,000-decision workflow set with teacher soft labels.
+- **TypeSafe AI, Jev**: the product that defined the interface (state, typed questions, calibrated answers in one pass). Not affiliated.
+- **Qwen** (Apache-2.0): the base models of the Tacit checkpoints, Qwen3-1.7B, Qwen3-4B, Qwen3-8B, Qwen3.5-2B and Qwen3.5-9B.
+- **vLLM** (Apache-2.0): the inference engine behind `Tacit(engine="vllm")`, `engine="server"` and `VLLMBackend`.
+- **JevBench** (fstandhartinger/jevbench, MIT) and **bev-decision** (avbiswas/bev-decision): the two benchmarks the Tacit results are reported on.
 - The open readout clones that documented the problem first: SemIf, LitJev, the OpenJev servers, poorjev, open-llm-classifier. Their READMEs said the probabilities were not calibrated and the order mattered; this repo measures it.
 
 ## Reported and contributed
@@ -26,7 +26,6 @@ CHANGELOG next to what they fixed.
 - Contextual calibration: Zhao et al., "Calibrate Before Use", ICML 2021, arXiv:2102.09690
 - Batch calibration: Zhou et al., "Batch Calibration", ICLR 2024, arXiv:2309.17249
 - Permutation debiasing: Zheng et al., "Large Language Models Are Not Robust Multiple Choice Selectors", ICLR 2024, arXiv:2309.03882
-- Temperature scaling: Guo et al., "On Calibration of Modern Neural Networks", ICML 2017, arXiv:1706.04599
 - Surface-form competition (planned span readout): Holtzman et al., EMNLP 2021, arXiv:2104.08315
 - Conformal prediction (planned): Angelopoulos and Bates, 2021, arXiv:2107.07511
 - Reliability gating (planned): Chen et al., "Routing Without Training: Controllable-Ratio LLM Offloading via Reliability Gating", 2026, arXiv:2607.20481

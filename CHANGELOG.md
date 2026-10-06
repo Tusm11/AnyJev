@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.3.0 (2026-10-06)
+
+AnyJev now has two directions: **training-free** (`Decider`, levels `raw` and `L0`, any open LLM) and
+**self-distilled** (`Tacit`, the Tacit models on Hugging Face). This release adds the second and
+removes the label-trained levels. **Breaking:** code that uses `L1`, `L2`, heads, routing,
+`observe` or `level="auto"` should pin `anyjev==0.2.0`. Docs and code that earlier entries cite are at
+tag `v0.2.0`.
+
+- **New: `anyjev.Tacit`, inference and serving for the Tacit models** (Tacit-1.7B, 2B, 4B, 8B, 9B,
+  [collection](https://huggingface.co/collections/morriszjm/tacit-6ac41d0b50af9e5417c5c234)).
+  `Tacit.from_pretrained(repo, engine=...)` runs on transformers, on vLLM in the same process
+  (`engine="vllm"`; Qwen3.5 checkpoints switch to the Triton gated-delta-rule kernel when `nvcc` is
+  missing), or against a running `vllm serve` (`engine="server"`, OpenAI `/v1/completions` with
+  token-id prompts; the client loads only the tokenizer, and `base_url` may be the server root or its
+  `/v1` URL). One decision is one prefill of the prompt the models were trained with; the prompt
+  builder is the library's own, and `Decider(level="raw")` sends the identical prompt (tested).
+  `decide` / `decide_batch` return `answer`, `index`, `probs`, `margin` and `route`.
+- **New: capped escalation to reasoning.** With `adaptive=True`, a decision whose top-two margin is
+  under `tau` (0.5) is answered again with thinking on. After the thought closes, `Answer:` is appended
+  and the label distribution is read, so the escalated answer has probabilities and cannot fail to
+  parse. At most `max_cot_share` (0.2) of the last `cot_window` (1,000) decisions escalate (rounded up;
+  `cot_window=None` counts since loading). The bookkeeping is locked, so threads and clients share one
+  cap. Escalations are reported (`route="cot"`, `first_pass`, `reasoning_tokens`) and counted in
+  `Tacit.stats`. On vLLM the labels are read from the top 20 log-probabilities.
+- **New: `python -m anyjev.serve`**, a standard-library HTTP gateway in front of `vllm serve`:
+  `POST /v1/decide` (one decision or `{"items": [...]}`), `GET /v1/stats`, `GET /health`; 400 on a
+  malformed request, 502 when the upstream fails; binds 127.0.0.1 by default.
+- **Results:** Tacit accuracy with one forward per decision on JevBench (public, 231) and bev-decision
+  (test, 46,320), `bench/results_tacit/2026-10-05/one_forward.json`, in both READMEs;
+  `tests/test_readme_numbers.py` checks the README tables against their JSON.
+- **Removed:** `L1` (`calibrate`, `TemperatureScaler`, artifacts and `CALIBRATORS`), `L2` (`fit_head`,
+  `anyjev/heads.py`, routing, `adapt`, `observe`, `level="auto"`, artifact export and load),
+  `anyjev.pipeline`, the shipped heads (`anyjev-heads/`), `demo/`, the benchmark code under `bench/`
+  (the result JSON the docs cite is kept), and the docs that described them. `LEVELS` is
+  `("raw", "L0")`. The hidden-state paths (`HFBackend.hidden_states` / `hidden_states_to`, the vLLM
+  pooler path, `anyjev.truncate`) stay for the label-free early exit planned for 0.3.1.
+- Fix: `Tacit` on transformers older than 5 passes the dtype as `torch_dtype`, as `HFBackend` does;
+  before 4.56, `dtype=` was dropped silently and the model loaded in float32.
+- Packaging: extras `vllm` (`vllm>=0.17.1`, the version the Tacit checkpoints were checked on) and
+  `client` (the tokenizer only, for `engine="server"` and the gateway); the `bench` extra is gone. CI
+  lints `anyjev scripts space tests`.
+- Docs: `docs/levels.md` rewritten for raw / L0 and Tacit's routes; the README banner and the
+  how-it-works figure show raw and L0 only; the Roadmap is rewritten, and the Limitations move out of
+  the README into `docs/limitations.md` (and `docs/limitations.zh-CN.md`).
+
 ## 0.2.0 (2026-09-28)
 
 - **New, opt-in: L0 can read as many option rotations as the decision needs instead of K, with the
@@ -64,7 +109,7 @@
 Version 3 of the method: a closed-form head at a fixed depth, routing, label-free adaptation, a packaged demo, and a tree that
 carries only the shipped code and the result JSON a doc cites (`docs/migration_v3.md` lists everything removed).
 
-- **L2: closed-form per-question heads on the hidden state, at two thirds of the depth.** `Decider.fit_head(question, states, labels)` (or `calibrate(..., level="L2")`) runs one forward of the labelled states and solves a shrunk-LDA or ridge head on the last-position hidden state; the block it reads, the head kind and the temperature are chosen by out-of-fold NLL. `decide(..., level="L2")` then sends one prompt per state through a forward that stops at that block (`HFBackend.hidden_states_to`, bit-exact against the plain forward in fp32, `scripts/exit_parity.py`) and returns calibrated probabilities with `blocks_executed` in the diagnostics; `require="L2"` is enforced like the other levels. Artifacts round-trip through `export_artifacts` / `load_artifacts` / `load_artifact` (refused on another model or question layout). On LocalLLaMA/typed-decisions with 300 labels per question: Qwen3-1.7B 0.730 at 64% depth, Qwen3-4B 0.786 at 67%, Qwen3-8B 0.771 at 67% (L1: 0.499 / 0.567 / 0.648; Jev published 0.727), pooled ECE 0.03-0.05, at 0.68x the batched time of one plain forward on the 8B; Qwen3-30B-A3B 0.799 at 83%, Qwen3-32B 0.798 at 81% (`docs/results_exit.md`, from `bench/results_exit/2026-09-22/`). Needs the transformers backend. `docs/method_v3.md`, `docs/jev_mode.md`, `docs/levels.md`, `docs/research_log.md`.
+- **L2: closed-form per-question heads on the hidden state, at two thirds of the depth.** `Decider.fit_head(question, states, labels)` (or `calibrate(..., level="L2")`) runs one forward of the labelled states and solves a shrunk-LDA or ridge head on the last-position hidden state; the block it reads, the head kind and the temperature are chosen by out-of-fold NLL. `decide(..., level="L2")` then sends one prompt per state through a forward that stops at that block (`HFBackend.hidden_states_to`, bit-exact against the plain forward in fp32, `scripts/exit_parity.py`) and returns calibrated probabilities with `blocks_executed` in the diagnostics; `require="L2"` is enforced like the other levels. Artifacts round-trip through `export_artifacts` / `load_artifacts` / `load_artifact` (refused on another model or question layout). On LocalLLaMA/typed-decisions with 300 labels per question: Qwen3-1.7B 0.730 at 64% depth, Qwen3-4B 0.786 at 67%, Qwen3-8B 0.771 at 67% (L1: 0.499 / 0.567 / 0.648), pooled ECE 0.03-0.05, at 0.68x the batched time of one plain forward on the 8B; Qwen3-30B-A3B 0.799 at 83%, Qwen3-32B 0.798 at 81% (`docs/results_exit.md`, from `bench/results_exit/2026-09-22/`). Needs the transformers backend. `docs/method_v3.md`, `docs/jev_mode.md`, `docs/levels.md`, `docs/research_log.md`.
 - L2 follows its question across wordings and listing orders. `Decider.route(q)` serves a question from its exact head, else from the head of the same kind and option texts under another wording, else (heads fit on random listing orders) from the head of the same option set in another order; `Decider(adapt="routed")` (default) re-estimates a routed head's feature mean and scale from the unlabelled states the question is asked on (30 by default, the current batch included), which on Qwen3-8B takes a reworded question from 0.65-0.70 (head as is) to 0.74-0.75 with 30 unlabelled states (0.74-0.76 with 300) against 0.77 for a labelled refit (`bench/results_paraphrase/2026-09-22/Qwen__Qwen3-8B.paraphrase.b24.json`; the 4B goes 0.63-0.68 to 0.74-0.75, `Qwen__Qwen3-4B.paraphrase.b24.json`; research log entry 13); `fit_head(listing="auto")` fits on random listing orders up to 8 options (flip under reversal 0.07 instead of 0.18, `<model>.order.json`) and on the canonical order above (random listings cost the 20-way bench heads 6-18 points in the artifact builds, entry 13); `level="auto"` picks L2 / L1 / L0 per question. Diagnostics: `routed_from`, `reordered`, `adapted`, `adapt_n`, `listing`.
 - Closed-form distillation: `bench.synth_states` writes new cases per workflow from real exemplars (Qwen3-8B, thinking off), `bench.distill_heads` labels them with a teacher's shipped heads and solves student heads on gold plus teacher-labelled states (hard or soft targets); the 32B's heads lift the Qwen3-1.7B from 0.730 to 0.760 on typed-decisions (95% CI on the gain [+0.015, +0.049]), the 4B and 8B do not move (`bench/results_distill/2026-09-22/Qwen__Qwen3-32B.distill_heads.fit.json`, entry 14).
 - Shipped heads: `scripts/build_heads.py` fits and validates a model's heads for the 20 typed questions and the three bench tasks through the user path and writes `anyjev-heads/<model>.json` (with per-question validation, the agreement with the study caches, and `env`). The head arrays are stored as base64 float32 (`anyjev.heads.encode_array`, exact, about ten times smaller than number lists): 1.8-4.4 MB per model, 13.6 MB for the five; `LinearHead.from_dict` and `load_artifacts` read the list format too, and `scripts/compact_heads.py` converts in place after a bit-exact round-trip check.

@@ -1,7 +1,7 @@
 """Render the README banner from committed bench JSON.
 
-The three stats on the banner are read from the same files bench.table reads,
-so the header cannot drift away from the measured numbers. Two themes are
+The three stats on the banner (raw readout -> L0, no labels) are read from the committed result
+JSON, so the header cannot drift away from the measured numbers. Two themes are
 written; it sits on the page rather than punching a dark block into it.
 
     python scripts/make_banner.py [results_dir]
@@ -80,7 +80,7 @@ def render(lv: dict, out: Path) -> None:
     ax.text(0.5, 0.633, "Turn any LLM into a Jev-style decision model",
             color=t["ink"], fontsize=19, ha="center", va="center",
             transform=ax.transAxes, zorder=3)
-    ax.text(0.5, 0.553, "Typed decisions  ·  real probabilities  ·  no training",
+    ax.text(0.5, 0.553, "Typed decisions  ·  real probabilities  ·  training-free or self-distilled",
             color=t["accent"], fontsize=13.5, ha="center", va="center",
             transform=ax.transAxes, zorder=3)
 
@@ -91,13 +91,13 @@ def render(lv: dict, out: Path) -> None:
     ax.add_patch(strip)
 
     stat(ax, t, 0.065, "order-flip rate", lv["raw"]["flip"], lv["L0"]["flip"])
-    stat(ax, t, 0.375, "calibration error", lv["raw"]["ece"], lv["L1"]["ece"])
-    stat(ax, t, 0.675, "auto-decidable at 5% risk", lv["raw"]["cov@5%"], lv["L1"]["cov@5%"], pct=True)
+    stat(ax, t, 0.375, "accuracy", lv["raw"]["acc"], lv["L0"]["acc"])
+    stat(ax, t, 0.675, "auto-decidable at 5% risk", lv["raw"]["cov@5%"], lv["L0"]["cov@5%"], pct=True)
     for x in (0.335, 0.635):
         ax.plot([x, x], [0.145, 0.425], color=t["dim"], alpha=t["rule"], linewidth=1,
                 transform=ax.transAxes, zorder=3)
 
-    ax.text(0.965, 0.055, f"{HEADLINE[0]} · {HEADLINE[1]} · 300 items · measured, not claimed",
+    ax.text(0.965, 0.055, f"{HEADLINE[0]} · {HEADLINE[1]} · 300 items · raw readout → L0, no labels",
             color=t["faint"], fontsize=9, ha="right", va="center",
             transform=ax.transAxes, zorder=3)
 

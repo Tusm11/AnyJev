@@ -5,8 +5,8 @@ about not paying for all K. A step-by-step walk through the same material, with 
 out, is [`rotation_budget.zh-CN.md`](rotation_budget.zh-CN.md) (Chinese).
 
 From `bench/results_layout/2026-09-27/`: Qwen2.5-7B-Instruct and Qwen3-8B on massive_route (K=18) and
-newsgroups (K=20), 900 states per cell, 300 for calibration and 600 held out. Reproduce with
-`bench.layout.position_prior`, `bench.layout.margin_default` and `bench.layout.engine_cost`.
+newsgroups (K=20), 900 states per cell, 300 for calibration and 600 held out. The study code that
+produced these files is released with the evaluation harness.
 
 ## What the full cycle buys
 
@@ -32,7 +32,7 @@ Read rotations in `spread_order` and stop when the running marginal is decided. 
 whether that is safe.
 
 **The statistic.** A gap between the top two *probabilities* saturates at 1, so once the marginal is
-peaked it carries no information — exactly the regime where the rule must decide. `docs/results_adaptive.md`
+peaked it carries no information — exactly the regime where the rule must decide. An earlier sweep
 saw this without naming it: margins of 0.05, 0.1 and 0.2 gave identical results. The **log-odds
 margin** — the same gap in log space — is unbounded. Calibrated per (model, question) at a 1% target,
 the difference is not a matter of degree (`margin_default.json`):
@@ -73,7 +73,7 @@ listing would make the answer depend on the order the options were typed in — 
 ordered by the option text instead, so the prompts are a function of the option **set**: any two
 listings of the same options return identical probabilities, at any shift budget. That is stronger
 than the full cycle used to give, since a full cycle equalises positions but not which options sit
-next to each other, and the options attend to one another (research log entry 21).
+next to each other, and the options attend to one another.
 
 ## What it costs on an engine
 
@@ -108,20 +108,19 @@ rows held at 16.1-16.2. The ratio inherits the reference's run-to-run variance, 
 ## Using it
 
 ```python
-d = Decider(backend, adaptive_shifts=True, canonical_order=True)   # opt-in in 0.2.0
+d = Decider(backend, adaptive_shifts=True, canonical_order=True)   # opt-in
 d.calibrate_adaptive(question, unlabelled_states, target=0.01)   # no labels; a few hundred states
 d.decide_batch(states, question)                      # diagnostics: shifts_used, stop_threshold
 ```
 
-Both are opt-in in 0.2.0 only because the tables in `docs/` were measured before this existed; they become the defaults when those are regenerated. `adaptive_target` sets the disagreement rate to certify.
-`adaptive_margin` pins the threshold by hand and `adaptive_stat="prob"` restores the pre-0.6 rule.
-`canonical_order=False` restores pre-0.6 prompts.
+Both are opt-in because the published L0 tables were measured with every rotation; they become the defaults when those are regenerated. `adaptive_target` sets the disagreement rate to certify.
+`adaptive_margin` pins the threshold by hand and `adaptive_stat="prob"` restores the pre-0.2 rule.
+`canonical_order=False` keeps the caller's listing.
 
 ## Limits
 
 The saving is bounded by `(P + K*B) / (P + R*B)` for a prefix of P tokens and an option block of B, so
 a long agentic context eats it: at R=4 on massive_route the measured speedup falls from 3.7x at a
 10-token state to 1.9x at 1500 (`sc_q25_massive.json`). `DEFAULT_LOG_MARGIN` was certified at K=18–20 on
-two 7–8B models; outside that, calibrate. And none of this closes the gap to L2, which reads one prompt
-per state at 0.68x of one forward — the rotation budget makes the label-free level affordable, it does
-not make it competitive with a head.
+two 7–8B models; outside that, calibrate. And the budget does not go below a few prefills per decision:
+where one forward is the requirement, the self-distilled Tacit models answer in one.

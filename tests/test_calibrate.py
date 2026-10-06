@@ -1,7 +1,6 @@
 import numpy as np
 
 from anyjev.calibrate import (
-    TemperatureScaler,
     apply_contextual,
     content_free_prior,
     cyclic_shifts,
@@ -83,19 +82,6 @@ def test_mean_is_invariant_to_rotation_only():
     np.testing.assert_allclose(a, rot, atol=1e-12)
     assert not np.allclose(a, other, atol=1e-6)
     assert int(np.argmax(a)) == 1
-
-
-def test_temperature_scaling_recovers_temperature():
-    rng = np.random.default_rng(0)
-    logits = rng.normal(size=(2000, 4)) * 2
-    labels = np.array([rng.choice(4, p=softmax(z)) for z in logits])
-    overconfident = softmax(logits * 3.0)          # true T is 3
-    s = TemperatureScaler.fit(overconfident, labels)
-    assert 2.5 < s.temperature < 3.5
-    p = s.apply(overconfident)
-    np.testing.assert_allclose(p.sum(1), 1.0)
-    rt = TemperatureScaler.from_dict(s.to_dict())
-    assert rt.temperature == s.temperature
 
 
 def test_spread_order_is_a_permutation_that_starts_wide():

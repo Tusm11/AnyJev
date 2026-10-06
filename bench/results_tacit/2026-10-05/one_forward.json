@@ -1,0 +1,73 @@
+{
+  "what": "Tacit checkpoints, one forward per decision (Tacit(adaptive=False)): the options in the order the benchmark lists them, the answer read as the argmax of the softmax over the option labels. Accuracy on every item of both test sets.",
+  "date": "2026-10-05",
+  "dtype": "bfloat16",
+  "benchmarks": {
+    "jevbench_public": {
+      "source": "https://github.com/fstandhartinger/jevbench, datasets/public (easy 48, original 72, hard 111)",
+      "n": 231
+    },
+    "bev_decision_test": {
+      "source": "https://huggingface.co/datasets/avbiswas/bev-decision, default config, test split, every (state, question) pair",
+      "n": 46320
+    }
+  },
+  "note": "Measured by the maintainers' evaluation harness, which is released together with the adaptive (one forward + reasoning) results. Before upload, every exported checkpoint was reloaded and gave the same answers as the evaluated weights on 256 bev-decision test pairs. Run through Tacit from the Hub, one forward agreed with these evaluations on 96.6-100% of 1,000 bev-decision and 213 JevBench items, with accuracy within 0.6 points on bev-decision.",
+  "models": {
+    "morriszjm/Tacit-9B": {
+      "base_model": "Qwen/Qwen3.5-9B",
+      "jevbench_public": {
+        "correct": 190,
+        "accuracy": 0.8225
+      },
+      "bev_decision_test": {
+        "correct": 33572,
+        "accuracy": 0.7248
+      }
+    },
+    "morriszjm/Tacit-8B": {
+      "base_model": "Qwen/Qwen3-8B",
+      "jevbench_public": {
+        "correct": 173,
+        "accuracy": 0.7489
+      },
+      "bev_decision_test": {
+        "correct": 30682,
+        "accuracy": 0.6624
+      }
+    },
+    "morriszjm/Tacit-4B": {
+      "base_model": "Qwen/Qwen3-4B",
+      "jevbench_public": {
+        "correct": 167,
+        "accuracy": 0.7229
+      },
+      "bev_decision_test": {
+        "correct": 30733,
+        "accuracy": 0.6635
+      }
+    },
+    "morriszjm/Tacit-2B": {
+      "base_model": "Qwen/Qwen3.5-2B",
+      "jevbench_public": {
+        "correct": 155,
+        "accuracy": 0.671
+      },
+      "bev_decision_test": {
+        "correct": 28982,
+        "accuracy": 0.6257
+      }
+    },
+    "morriszjm/Tacit-1.7B": {
+      "base_model": "Qwen/Qwen3-1.7B",
+      "jevbench_public": {
+        "correct": 144,
+        "accuracy": 0.6234
+      },
+      "bev_decision_test": {
+        "correct": 27681,
+        "accuracy": 0.5976
+      }
+    }
+  }
+}
