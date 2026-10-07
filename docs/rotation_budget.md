@@ -6,7 +6,7 @@ out, is [`rotation_budget.zh-CN.md`](rotation_budget.zh-CN.md) (Chinese).
 
 From `bench/results_layout/2026-09-27/`: Qwen2.5-7B-Instruct and Qwen3-8B on massive_route (K=18) and
 newsgroups (K=20), 900 states per cell, 300 for calibration and 600 held out. The study code that
-produced these files is released with the evaluation harness.
+produced these files is not in the current tree; it is `bench/layout/` at tag `v0.2.0`.
 
 ## What the full cycle buys
 

@@ -34,6 +34,8 @@ hf = ["torch>=2.3", "transformers>=4.53"]
 vllm = ["vllm>=0.17.1"]
 # a client of a running `vllm serve` (engine="server", python -m anyjev.serve) needs only the tokenizer
 client = ["transformers>=4.53"]
+# scripts/eval_tacit.py: the bev-decision split and the tokenizer
+eval = ["datasets>=2.20", "transformers>=4.53"]
 dev = ["pytest>=8", "ruff"]
 
 [project.urls]

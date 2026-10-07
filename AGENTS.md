@@ -2,7 +2,7 @@
 
 ## Ground rules
 
-1. **No fabricated data, ever.** Published numbers come from committed result JSON under `bench/results_*/<date>/` (the runs behind the shipped tables are `bench/results_v01/2026-09-22/`, `bench/results_layout/2026-09-27/` and `bench/results_tacit/2026-10-05/`). If a run did not happen, the cell is empty. Every number in prose names its JSON, and `tests/test_readme_numbers.py` checks the README tables against theirs.
+1. **No fabricated data, ever.** Published numbers come from committed result JSON under `bench/results_*/<date>/` (the runs behind the shipped tables are `bench/results_v01/2026-09-22/`, `bench/results_layout/2026-09-27/` and `bench/results_tacit/2026-10-06/`). If a run did not happen, the cell is empty. Every number in prose names its JSON, and `tests/test_readme_numbers.py` checks the README tables against theirs.
 2. **No hidden generation.** `Decider` never samples tokens. `Tacit` generates only for an escalated decision (`adaptive=True`), and every escalation is reported (`route="cot"`) and counted against the cap. Any other code path that samples tokens is a bug.
 3. **Level and route are mandatory.** Every `Decision` carries `level` (`raw` / `L0`); every Tacit decision carries `route` (`one_forward` / `cot`). Tests assert both.
 4. **Backends are thin.** A backend implements `next_token_logprobs(prompts, token_ids)`; the transformers backend adds the optional methods the Decider probes for (`score_shared` for shared-prefix scoring, `hidden_states` / `hidden_states_to` for reading an intermediate block). Nothing else goes in `anyjev/backends/`: debiasing and calibration live above the backend and are tested once. Tacit's engines live in `anyjev/tacit.py` and implement `read` and `reason_read`.

@@ -278,7 +278,7 @@ shortlist 里存活下来的选项仍然是互相可见的。
 
 ---
 
-结果：`bench/results_layout/2026-09-27/`。产生这些结果的实验代码随评测代码一起发布。
+结果：`bench/results_layout/2026-09-27/`。产生这些结果的实验代码不在当前代码树里，在 tag `v0.2.0` 的 `bench/layout/` 下。
 
 ---
 

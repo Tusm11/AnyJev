@@ -43,7 +43,14 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 from anyjev.question import Question
-from anyjev.readout import DEFAULT_SYSTEM, build_prompt, label_ids_for_perm, render_chat, resolve_labels
+from anyjev.readout import (
+    DEFAULT_SYSTEM,
+    build_prompt,
+    label_ids_for_perm,
+    map_label_tokens,
+    render_chat,
+    resolve_labels,
+)
 
 COT_SYSTEM = "You are a careful assistant that answers questions about a given context."
 KINDS = {"choice": "choice", "yes_no": "noul", "noul": "noul", "score": "score"}
@@ -349,10 +356,12 @@ class Tacit:
 
     # ------------------------------------------------------------------ public API
     def decide(self, state: str, question: str, options: Optional[Sequence[str]] = None,
-               kind: str = "choice") -> Dict[str, Any]:
+               kind: str = "choice", first_level: int = 1) -> Dict[str, Any]:
         """One decision. kind: "choice" (pick one of `options`), "yes_no", or "score" (`options` are
-        ordered levels, lowest first)."""
-        return self.decide_batch([dict(state=state, question=question, options=options, kind=kind)])[0]
+        ordered levels, lowest first, numbered from `first_level`: 1 by default, 0 for a rubric that
+        counts from 0)."""
+        return self.decide_batch([dict(state=state, question=question, options=options, kind=kind,
+                                       first_level=first_level)])[0]
 
     def decide_batch(self, items: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Each item: dict(state=..., question=..., options=[...], kind=...). Within a batch the least
@@ -414,7 +423,15 @@ class Tacit:
         if "question" not in it:
             raise ValueError("a decision needs a question")
         q = make_question(it["question"], it.get("options"), it.get("kind", "choice"))
-        labels, ids = resolve_labels(self.tok, q)
+        first = it.get("first_level", 1)
+        if first not in (0, 1):
+            raise ValueError("first_level must be 0 or 1")
+        if q.kind == "score" and first == 0:
+            # levels shown and read as 0..K-1, for rubrics that number them that way
+            labels = [str(j) for j in range(q.k)]
+            ids = map_label_tokens(self.tok, labels)
+        else:
+            labels, ids = resolve_labels(self.tok, q)
         return dict(state=str(it.get("state", "")), q=q, labels=labels,
                     ids=label_ids_for_perm(q, ids, list(range(q.k))))
 

@@ -30,13 +30,16 @@ The version in brackets is the one an item first shipped in.
   Opt-in until the L0 tables are regenerated at the new defaults.
 - [x] **Tacit models on Hugging Face** (0.3). Tacit-1.7B, 2B, 4B, 8B and 9B, one forward per decision,
   in the [Tacit collection](https://huggingface.co/collections/morriszjm/tacit-6ac41d0b50af9e5417c5c234);
-  accuracy on JevBench (public, 231) and bev-decision (test, 46,320) in
-  `bench/results_tacit/2026-10-05/one_forward.json`.
+  accuracy on JevBench (public, 231) and bev-decision (test, 46,320) in `bench/results_tacit/2026-10-06/`.
 - [x] **`Tacit` in the library** (0.3). `anyjev.Tacit` on transformers, in-process vLLM and a running
   `vllm serve`; `adaptive=True` sends decisions whose top-two margin is under `tau` to the model's own
   reasoning and reads the answer as a label distribution afterwards; at most `max_cot_share` of the
   last `cot_window` decisions escalate. `python -m anyjev.serve` puts an HTTP gateway with one shared
   cap in front of a vLLM server. Tested on CPU with a fake engine (`tests/test_tacit.py`).
+- [x] **The evaluation harness, and results with escalation** (unreleased). `scripts/eval_tacit.py` decides
+  every item of the JevBench public set and the bev-decision test split through `Tacit` against `vllm serve`,
+  one forward or adaptive, and writes the JSON the README tables are read from (`bench/results_tacit/2026-10-06/`):
+  one forward for all five Tacit models, adaptive for Tacit-9B and Tacit-4B.
 - [x] **Releases on PyPI** (0.1.0, 0.2.0). Each was installed from the index into a fresh venv, with
   `__version__` matching `pyproject.toml`.
 
@@ -46,11 +49,9 @@ test-time adaptation, `observe`), the shipped heads, the demos and the benchmark
 
 ## Now
 
-- [ ] **Results with escalation, and the evaluation harness.** Why: the published Tacit numbers are one
-  forward; `adaptive=True` is the setting most deployments will use, and every number must be
-  reproducible from shipped code. *Done:* the harness runs JevBench and bev-decision from one command
-  per model, its JSON is committed with the share of decisions escalated and the generated tokens per
-  decision, and both READMEs quote it.
+- [ ] **Results with escalation for Tacit-8B, Tacit-2B and Tacit-1.7B.** Why: the READMEs show escalation
+  for Tacit-9B and Tacit-4B only. *Done:* `scripts/eval_tacit.py --adaptive` on both sets for each, the JSON
+  in `bench/results_tacit/`, and the empty cells filled.
 - [ ] **Label-free early exit** (0.3.1). Why: a decision often does not need the model's full depth. A
   map into the final layer's basis, fitted without labels, reads the decision from a truncated
   forward, and the depth is chosen by agreement with the full model's answer. The hidden-state

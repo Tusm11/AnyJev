@@ -2,8 +2,8 @@
 
 | What | Where | License | Used for |
 |---|---|---|---|
-| JevBench, public set | https://github.com/fstandhartinger/jevbench (`datasets/public`: easy, original, hard; 231 items) | MIT | Tacit results, `bench/results_tacit/` |
-| bev-decision | https://huggingface.co/datasets/avbiswas/bev-decision (default config, test split) | not stated on the dataset card (`license: unknown`) | Tacit results, `bench/results_tacit/`; evaluation only |
+| JevBench, public set | https://github.com/fstandhartinger/jevbench (`datasets/public`: easy, original, hard; 231 items) | MIT | Tacit results, `scripts/eval_tacit.py` (from a local checkout), `bench/results_tacit/` |
+| bev-decision | https://huggingface.co/datasets/avbiswas/bev-decision (default config, test split) | not stated on the dataset card (`license: unknown`) | Tacit results, `scripts/eval_tacit.py`, `bench/results_tacit/`; evaluation only |
 | banking77 (mteb parquet mirror) | https://huggingface.co/datasets/mteb/banking77 | CC-BY-4.0 | the raw / L0 table (`banking20`, `bench/results_v01/`) and the README GIF |
 | 20 Newsgroups (SetFit mirror) | https://huggingface.co/datasets/SetFit/20_newsgroups | see dataset card | `newsgroups` in `bench/results_v01/` and `bench/results_layout/` |
 | deepset/prompt-injections | https://huggingface.co/datasets/deepset/prompt-injections | Apache-2.0 | `injection` in `bench/results_v01/` |

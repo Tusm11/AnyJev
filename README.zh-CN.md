@@ -50,7 +50,7 @@ d = tacit.decide(state="Customer: my package was due last Monday and it still ha
 d["answer"], d["probs"], d["route"]    # 一个选项、{选项: 概率}、"one_forward" 或 "cot"
 ```
 
-`kind` 可以是 `"choice"`（默认）、`"yes_no"` 或 `"score"`（这时 `options` 是从低到高排好的档位）。
+`kind` 可以是 `"choice"`（默认）、`"yes_no"` 或 `"score"`（这时 `options` 是从低到高排好的档位，从 1 开始编号；`first_level=0` 则从 0 开始）。
 `decide_batch([...])` 接收由这样的 dict 组成的列表。
 
 **把最难的决策交给推理，并设上限。**
@@ -152,21 +152,22 @@ vLLM 上每秒决策数是原来的 2.2×，transformers 上是 2.3×–2.7×，
 
 <div align="center">
 
-| 模型 | 基座 | JevBench 公开集（231） | bev-decision 测试集（46,320） |
-|:--|:--|:--:|:--:|
-| [Tacit-9B](https://huggingface.co/morriszjm/Tacit-9B) | Qwen3.5-9B | **0.823** | **0.725** |
-| [Tacit-8B](https://huggingface.co/morriszjm/Tacit-8B) | Qwen3-8B | 0.749 | 0.662 |
-| [Tacit-4B](https://huggingface.co/morriszjm/Tacit-4B) | Qwen3-4B | 0.723 | 0.663 |
-| [Tacit-2B](https://huggingface.co/morriszjm/Tacit-2B) | Qwen3.5-2B | 0.671 | 0.626 |
-| [Tacit-1.7B](https://huggingface.co/morriszjm/Tacit-1.7B) | Qwen3-1.7B | 0.623 | 0.598 |
+| 模型 | 基座 | JevBench 公开集（231） | 分流 | bev-decision 测试集（46,320） | 分流 |
+|:--|:--|:--:|:--:|:--:|:--:|
+| [Tacit-9B](https://huggingface.co/morriszjm/Tacit-9B) | Qwen3.5-9B | 0.823 | **0.887** <sub>15.2%</sub> | 0.727 | **0.755** <sub>18.1%</sub> |
+| [Tacit-8B](https://huggingface.co/morriszjm/Tacit-8B) | Qwen3-8B | 0.736 | — | 0.663 | — |
+| [Tacit-4B](https://huggingface.co/morriszjm/Tacit-4B) | Qwen3-4B | 0.723 | **0.758** <sub>14.3%</sub> | 0.663 | **0.704** <sub>17.8%</sub> |
+| [Tacit-2B](https://huggingface.co/morriszjm/Tacit-2B) | Qwen3.5-2B | 0.671 | — | 0.626 | — |
+| [Tacit-1.7B](https://huggingface.co/morriszjm/Tacit-1.7B) | Qwen3-1.7B | 0.619 | — | 0.598 | — |
 
-<sub>每个决策一次前向（`adaptive=False`），选项按基准里给的顺序，两个测试集全部样本上的准确率
-（[JevBench](https://github.com/fstandhartinger/jevbench) 公开集；[bev-decision](https://huggingface.co/datasets/avbiswas/bev-decision) 测试集）·
-`bench/results_tacit/2026-10-05/one_forward.json`</sub>
+<sub>两个测试集全部样本上的准确率（[JevBench](https://github.com/fstandhartinger/jevbench) 公开集；
+[bev-decision](https://huggingface.co/datasets/avbiswas/bev-decision) 测试集），按数据集存储顺序。第一列：每个决策一次前向
+（`adaptive=False`）。分流：`adaptive=True`，默认参数（`tau=0.5`，每 1,000 个决策里最多 20% 转去推理），小字是转去推理的比例。
+用 `vllm serve`（vLLM 0.17.1）服务，`scripts/eval_tacit.py` 运行 · `bench/results_tacit/2026-10-06/`</sub>
 
 </div>
 
-打开转推理（`adaptive=True`）的结果，会和评测代码一起发布。
+打开转推理后，平均每个决策多生成的 token：Tacit-9B 在 JevBench 上 567 个、bev-decision 上 458 个；Tacit-4B 分别是 305 和 187 个。Tacit-8B、2B、1.7B 打开转推理的结果随后补上。
 
 ## 🧠 怎么读出一个决策
 
@@ -191,7 +192,8 @@ vLLM 上每秒决策数是原来的 2.2×，transformers 上是 2.3×–2.7×，
 - [x] `choice`、`noul`、`score` 一次 prefill 读出；零标签的 L0
 - [x] 旋转预算：L0 平均读 18 次轮换里的 7 次左右，停止门槛不用标签就能证明
 - [x] **Tacit-1.7B、2B、4B、8B、9B** 发布在 Hugging Face；库里的 `Tacit` 支持 transformers、vLLM 和 `vllm serve`，带有上限的转推理和 HTTP 网关
-- [ ] 🚧 JevBench 和 bev-decision 上打开转推理的结果，和评测代码一起发布
+- [x] 评测代码（`scripts/eval_tacit.py`）；Tacit-9B 和 Tacit-4B 打开转推理的结果
+- [ ] 🚧 Tacit-8B、2B、1.7B 打开转推理的结果
 - [ ] 🚧 无标签的提前退出：只用模型的一部分层读出决策，层数按与完整模型的一致率来选
 - [ ] **Agent 循环里的评测**：把同样的决策放进真实的 agent 里
 - [ ] 更多 log-prob 后端（SGLang、llama.cpp、MLX、Ollama），以及超过 26 个选项的 span 读法

@@ -51,7 +51,7 @@ d["answer"], d["probs"], d["route"]    # an option, {option: probability}, "one_
 ```
 
 `kind` is `"choice"` (default), `"yes_no"` or `"score"` (`options` are ordered levels, lowest
-first). `decide_batch([...])` takes a list of such dicts.
+first, numbered from 1; `first_level=0` numbers them from 0). `decide_batch([...])` takes a list of such dicts.
 
 **Send the hardest decisions to reasoning, with a cap.**
 
@@ -161,22 +161,24 @@ automate at ≤5% error goes from **7.7% to 46.3%**, with no labels at all.
 
 <div align="center">
 
-| model | base | JevBench public (231) | bev-decision test (46,320) |
-|:--|:--|:--:|:--:|
-| [Tacit-9B](https://huggingface.co/morriszjm/Tacit-9B) | Qwen3.5-9B | **0.823** | **0.725** |
-| [Tacit-8B](https://huggingface.co/morriszjm/Tacit-8B) | Qwen3-8B | 0.749 | 0.662 |
-| [Tacit-4B](https://huggingface.co/morriszjm/Tacit-4B) | Qwen3-4B | 0.723 | 0.663 |
-| [Tacit-2B](https://huggingface.co/morriszjm/Tacit-2B) | Qwen3.5-2B | 0.671 | 0.626 |
-| [Tacit-1.7B](https://huggingface.co/morriszjm/Tacit-1.7B) | Qwen3-1.7B | 0.623 | 0.598 |
+| model | base | JevBench public (231) | adaptive | bev-decision test (46,320) | adaptive |
+|:--|:--|:--:|:--:|:--:|:--:|
+| [Tacit-9B](https://huggingface.co/morriszjm/Tacit-9B) | Qwen3.5-9B | 0.823 | **0.887** <sub>15.2%</sub> | 0.727 | **0.755** <sub>18.1%</sub> |
+| [Tacit-8B](https://huggingface.co/morriszjm/Tacit-8B) | Qwen3-8B | 0.736 | — | 0.663 | — |
+| [Tacit-4B](https://huggingface.co/morriszjm/Tacit-4B) | Qwen3-4B | 0.723 | **0.758** <sub>14.3%</sub> | 0.663 | **0.704** <sub>17.8%</sub> |
+| [Tacit-2B](https://huggingface.co/morriszjm/Tacit-2B) | Qwen3.5-2B | 0.671 | — | 0.626 | — |
+| [Tacit-1.7B](https://huggingface.co/morriszjm/Tacit-1.7B) | Qwen3-1.7B | 0.619 | — | 0.598 | — |
 
-<sub>Accuracy with one forward pass per decision (`adaptive=False`), the options in the benchmark's
-order, on every item of both test sets ([JevBench](https://github.com/fstandhartinger/jevbench) public
-set; [bev-decision](https://huggingface.co/datasets/avbiswas/bev-decision) test split) ·
-`bench/results_tacit/2026-10-05/one_forward.json`</sub>
+<sub>Accuracy on every item of both sets ([JevBench](https://github.com/fstandhartinger/jevbench) public
+set; [bev-decision](https://huggingface.co/datasets/avbiswas/bev-decision) test split), in the order they
+are stored. First column: one forward pass per decision (`adaptive=False`). Adaptive: `adaptive=True` at
+the defaults (`tau=0.5`, at most 20% of every 1,000 decisions), with the share of decisions sent to
+reasoning in small print. Served by `vllm serve` (vLLM 0.17.1), run with `scripts/eval_tacit.py` · `bench/results_tacit/2026-10-06/`</sub>
 
 </div>
 
-Results with escalation (`adaptive=True`) will be published together with the evaluation harness.
+On average, escalation adds 567 (JevBench) and 458 (bev-decision) generated tokens per decision for Tacit-9B,
+and 305 and 187 for Tacit-4B. Results with escalation for Tacit-8B, Tacit-2B and Tacit-1.7B come next.
 
 ## 🧠 How it works
 
@@ -202,7 +204,8 @@ Every Tacit decision carries its `route`.
 - [x] `choice`, `noul` and `score` from one prefill; L0 with zero labels
 - [x] The rotation budget: L0 at about 7 of 18 rotations, with a stopping threshold certified without labels
 - [x] **Tacit-1.7B, 2B, 4B, 8B and 9B** on Hugging Face; `Tacit` in the library on transformers, vLLM and `vllm serve`, with capped escalation to reasoning and an HTTP gateway
-- [ ] 🚧 Results with escalation on JevBench and bev-decision, released with the evaluation harness
+- [x] The evaluation harness (`scripts/eval_tacit.py`); results with escalation for Tacit-9B and Tacit-4B
+- [ ] 🚧 Results with escalation for Tacit-8B, Tacit-2B and Tacit-1.7B
 - [ ] 🚧 Label-free early exit: read a decision from part of the model's depth, choosing the depth by agreement with the full model
 - [ ] **Agent-loop evaluation**: the same decisions inside a real agent
 - [ ] More log-prob backends (SGLang, llama.cpp, MLX, Ollama), span readout beyond 26 options

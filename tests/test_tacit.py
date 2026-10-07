@@ -77,6 +77,15 @@ def test_decider_raw_reads_the_same_prompt():
     assert seen == eng.read_texts
 
 
+def test_score_levels_can_be_numbered_from_zero():
+    t, eng = make()
+    t.decide(state="S", question="Q?", options=["none", "some", "all"], kind="score", first_level=0)
+    assert eng.read_texts[-1].endswith("Pick the level that applies (the levels are ordered):\n0. none\n1. some\n"
+                                       "2. all\nAnswer with the number only.\nAnswer:")
+    with pytest.raises(ValueError):
+        t.decide(state="S", question="Q?", options=["a", "b"], kind="score", first_level=2)
+
+
 def test_result_shape():
     t, _ = make()
     d = t.decide(state="S", question="Q?", options=["a", "b", "c"])

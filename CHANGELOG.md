@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- **New: `scripts/eval_tacit.py`, the evaluation harness behind the README's Tacit numbers.** It decides
+  every item of the JevBench public set (from a checkout of github.com/fstandhartinger/jevbench) or the
+  bev-decision test split through `Tacit` against one or more `vllm serve` replicas, one forward or
+  adaptive, in blocks of 1,000 decisions (one window of the escalation cap each), and writes the summary
+  JSON the README tables are read from. The item mapping is the one the published numbers used (checked
+  item by item on all 46,551 items). `pip install "anyjev[eval]"` adds what it needs.
+- **README: results with escalation.** Tacit-9B and Tacit-4B at the default `adaptive=True` settings;
+  every Tacit number now comes from `bench/results_tacit/2026-10-06/` (`scripts/eval_tacit.py`), which
+  replaces `bench/results_tacit/2026-10-05/one_forward.json` (the maintainers' transformers evaluation).
+  Through `vllm serve` one forward stays within bf16 noise of that evaluation on bev-decision (−31 to
+  +80 decisions of 46,320) and differs by at most three items of 231 on JevBench (Tacit-8B 0.749 → 0.736,
+  Tacit-1.7B 0.623 → 0.619; the other three unchanged). With escalation: Tacit-9B JevBench 0.887, bev-decision
+  0.755; Tacit-4B 0.758 and 0.704, with 14–18% of decisions sent to reasoning.
+- `Tacit`: a `score` decision can number its levels from 0 (`first_level=0`, also in the gateway's
+  JSON), for rubrics that count from 0; the prompt shows and reads `0..K-1`. Default unchanged (1).
+
 ## 0.3.0 (2026-10-06)
 
 AnyJev now has two directions: **training-free** (`Decider`, levels `raw` and `L0`, any open LLM) and

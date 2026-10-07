@@ -57,5 +57,5 @@ answer a typed decision in one forward pass. `Tacit.decide` returns a dict:
   one-forward answer.
 - **A Tacit checkpoint is also an ordinary causal LM.** `Decider` builds the same prompt, so
   `Decider(HFBackend("morriszjm/Tacit-4B"), level="raw")` reads the same distribution as Tacit's one
-  forward; `level="L0"` reads every rotation (K prefills). The published Tacit results are one
-  forward.
+  forward; `level="L0"` reads every rotation (K prefills). The published Tacit results use Tacit's own
+  routes (one forward, and adaptive for two models), not `L0`.
