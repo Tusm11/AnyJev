@@ -21,6 +21,15 @@
   0.755; Tacit-4B 0.758 and 0.704, with 14–18% of decisions sent to reasoning.
 - `Tacit`: a `score` decision can number its levels from 0 (`first_level=0`, also in the gateway's
   JSON), for rubrics that count from 0; the prompt shows and reads `0..K-1`. Default unchanged (1).
+- **New: `LlamaCppBackend`** (`anyjev/backends/llamacpp.py`, extra `anyjev[llamacpp]`, llama-cpp-python>=0.3.16)
+  runs GGUF models at raw / L0. Each prompt is decoded from a cleared KV cache with logits requested for the
+  final token only (no `logits_all`), and the full-vocabulary log-softmax of that row is read; nothing is
+  sampled. By default the GGUF's own vocabulary and chat template are used; with `tokenizer=` a Hugging Face
+  tokenizer renders the prompts and every prompt and label id is checked token for token against the GGUF
+  (`TokenMismatchError` on a mismatch). No `score_shared` or `hidden_states`. Parity against `HFBackend`:
+  `scripts/llamacpp_parity.py`, with the runs in `bench/llamacpp_parity_f32.json` and
+  `bench/llamacpp_parity_f16.json`. Tests on a stub engine in `tests/test_llamacpp.py`; the `engine` pytest
+  marker is registered for tests that need a real engine.
 
 ## 0.3.0 (2026-10-06)
 

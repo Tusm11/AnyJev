@@ -36,7 +36,10 @@ vllm = ["vllm>=0.17.1"]
 client = ["transformers>=4.53"]
 # scripts/eval_tacit.py: the bev-decision split and the tokenizer
 eval = ["datasets>=2.20", "transformers>=4.53"]
-dev = ["pytest>=8", "ruff"]
+# anyjev.backends.llamacpp: GGUF models through llama-cpp-python
+llamacpp = ["llama-cpp-python>=0.3.16"]
+# jinja2 so CI exercises the default GGUF chat-template path (llama-cpp-python depends on it too)
+dev = ["pytest>=8", "ruff", "jinja2"]
 
 [project.urls]
 Homepage = "https://github.com/nokia-applied-research/AnyJev"
@@ -56,3 +59,4 @@ ignore = ["E731"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["engine: needs an inference engine installed (llama.cpp, vLLM, ...); skipped when it is not"]
