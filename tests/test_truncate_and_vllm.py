@@ -136,8 +136,8 @@ def test_the_config_comes_from_the_source_not_the_served_alias(stub, monkeypatch
 
 
 def test_a_label_missing_from_top_logprobs_raises_instead_of_reading_minus_30(monkeypatch):
-    """A server that reports raw full-vocabulary logprobs can leave a label out of the top K (seen on
-    vllm-metal); it used to be read as -30, a confident wrong distribution with no error (#13)."""
+    """Under raw logprobs (vLLM's default) the top K are the model's own top tokens, so a label can be
+    missing; it used to be read as -30, a confident wrong distribution with no error (#13)."""
     import io
 
     from anyjev.backends import vllm as V

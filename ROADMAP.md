@@ -40,6 +40,9 @@ The version in brackets is the one an item first shipped in.
   every item of the JevBench public set and the bev-decision test split through `Tacit` against `vllm serve`,
   one forward or adaptive, and writes the JSON the README tables are read from (`bench/results_tacit/2026-10-06/`):
   one forward for all five Tacit models, adaptive for Tacit-9B and Tacit-4B.
+- [x] **SGLang backend** (unreleased). `SGLangBackend` reads the label log-probabilities from SGLang's
+  native `/generate` endpoint without sampling; parity against `HFBackend` in `scripts/sglang_parity.py`,
+  checked on SGLang 0.5.10. Contributed by @shentonyan (#12).
 - [x] **Releases on PyPI** (0.1.0, 0.2.0). Each was installed from the index into a fresh venv, with
   `__version__` matching `pyproject.toml`.
 
@@ -72,7 +75,7 @@ test-time adaptation, `observe`), the shipped heads, the demos and the benchmark
 - [ ] **Conformal abstention.** Why: a probability still needs a rule for "do not answer".
   `Decider(target_error=...)` sets `decision.abstained`. *Done:* a `FakeBackend` test shows the realised
   error on answered items at or under the target on held-out synthetic data.
-- [ ] **More log-prob backends: SGLang, llama.cpp, MLX, Ollama.** Why: the contract is one method,
+- [ ] **More log-prob backends: llama.cpp, MLX, Ollama.** Why: the contract is one method,
   `next_token_logprobs(prompts, token_ids)`, and each engine is a file. *Done:* a parity script like
   `scripts/vllm_parity.py` agrees with transformers on argmax, and an `@pytest.mark.engine` smoke test
   exists. **help wanted.**
@@ -89,7 +92,7 @@ test-time adaptation, `observe`), the shipped heads, the demos and the benchmark
 
 Each of these is one file, reviewed as one PR. Open an issue first if you want the slot.
 
-- [ ] `anyjev/backends/sglang.py`, `llamacpp.py`, `mlx.py`, `ollama.py`: implement
+- [ ] `anyjev/backends/llamacpp.py`, `mlx.py`, `ollama.py`: implement
   `next_token_logprobs`, add a parity script against `HFBackend`, mark the engine test
   `@pytest.mark.engine`.
 

@@ -102,7 +102,7 @@ curl -s 127.0.0.1:8100/v1/decide -H 'Content-Type: application/json' \
 
 ```python
 from anyjev import Decider, Question
-from anyjev.backends.hf import HFBackend          # 或 anyjev.backends.vllm.VLLMBackend(url, model)
+from anyjev.backends.hf import HFBackend          # 或 anyjev.backends 里的 VLLMBackend / SGLangBackend(url, model)
 
 d = Decider(HFBackend("Qwen/Qwen3-8B"))           # 默认 level="L0"
 route = Question.choice("这条工单该由哪个团队处理？",
@@ -196,7 +196,8 @@ vLLM 上每秒决策数是原来的 2.2×，transformers 上是 2.3×–2.7×，
 - [ ] 🚧 Tacit-8B、2B、1.7B 打开转推理的结果
 - [ ] 🚧 无标签的提前退出：只用模型的一部分层读出决策，层数按与完整模型的一致率来选
 - [ ] **Agent 循环里的评测**：把同样的决策放进真实的 agent 里
-- [ ] 更多 log-prob 后端（SGLang、llama.cpp、MLX、Ollama），以及超过 26 个选项的 span 读法
+- [x] SGLang 后端（`anyjev.backends.sglang`），由 @shentonyan 贡献
+- [ ] 更多 log-prob 后端（llama.cpp、MLX、Ollama），以及超过 26 个选项的 span 读法
 
 带日期的计划和 help-wanted 文件：[ROADMAP.md](https://github.com/nokia-applied-research/AnyJev/blob/main/ROADMAP.md)。已知局限：[docs/limitations.zh-CN.md](https://github.com/nokia-applied-research/AnyJev/blob/main/docs/limitations.zh-CN.md)。
 

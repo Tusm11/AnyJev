@@ -59,4 +59,5 @@ ignore = ["E731"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["engine: needs an inference engine installed (llama.cpp, vLLM, ...); skipped when it is not"]
+markers = ["engine: needs an inference engine installed or running (llama.cpp, vLLM, SGLang, ...); skipped when it is not"]
+

@@ -104,7 +104,7 @@ causal LM, with no training and no labels.
 
 ```python
 from anyjev import Decider, Question
-from anyjev.backends.hf import HFBackend          # or anyjev.backends.vllm.VLLMBackend(url, model)
+from anyjev.backends.hf import HFBackend          # or VLLMBackend / SGLangBackend(url, model) from anyjev.backends
 
 d = Decider(HFBackend("Qwen/Qwen3-8B"))           # level="L0" by default
 route = Question.choice("Which team should handle this?",
@@ -208,7 +208,8 @@ Every Tacit decision carries its `route`.
 - [ ] 🚧 Results with escalation for Tacit-8B, Tacit-2B and Tacit-1.7B
 - [ ] 🚧 Label-free early exit: read a decision from part of the model's depth, choosing the depth by agreement with the full model
 - [ ] **Agent-loop evaluation**: the same decisions inside a real agent
-- [ ] More log-prob backends (SGLang, llama.cpp, MLX, Ollama), span readout beyond 26 options
+- [x] SGLang backend (`anyjev.backends.sglang`), contributed by @shentonyan
+- [ ] More log-prob backends (llama.cpp, MLX, Ollama), span readout beyond 26 options
 
 Dated plan and help-wanted files: [ROADMAP.md](https://github.com/nokia-applied-research/AnyJev/blob/main/ROADMAP.md). Known limitations: [docs/limitations.md](https://github.com/nokia-applied-research/AnyJev/blob/main/docs/limitations.md).
 
