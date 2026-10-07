@@ -5,7 +5,10 @@ Two server shapes, because vLLM gives one task per instance.
 **raw / L0** -- a generate server. One request per prompt with `max_tokens=1`,
 `allowed_token_ids` restricted to the label tokens and `logprobs=K`. vLLM reports
 logprobs after its logit processors, so the K entries are exactly the labels,
-normalized over them. Prefix caching makes the K permutations of one state cheap.
+normalized over them (checked on vLLM 0.17.1). A build that reports raw full-vocabulary
+logprobs instead can leave a label out (seen on vllm-metal); the backend then raises
+rather than guess, and `--logprobs-mode processed_logprobs` on the server fixes it.
+Prefix caching makes the K permutations of one state cheap.
 
     vllm serve Qwen/Qwen3-8B --enable-prefix-caching
     Decider(VLLMBackend("http://localhost:8000", "Qwen/Qwen3-8B"))
@@ -31,6 +34,8 @@ import urllib.request
 from typing import List, Optional, Sequence
 
 import numpy as np
+
+from anyjev.readout import LabelTokenError
 
 
 class VLLMBackend:
@@ -69,7 +74,12 @@ class VLLMBackend:
                 if key in top:
                     by_id[tid] = float(top[key])
                     break
-        return np.array([by_id.get(tid, -30.0) for tid in ids], dtype=np.float64)
+        missing = [tid for tid in ids if tid not in by_id]
+        if missing:
+            raise LabelTokenError(
+                f"the server returned no log-probability for label token ids {missing} (it returned "
+                f"{sorted(top)}); start vLLM with --logprobs-mode processed_logprobs")
+        return np.array([by_id[tid] for tid in ids], dtype=np.float64)
 
     def next_token_logprobs(self, prompts: Sequence[str],
                             token_ids: Sequence[Sequence[int]]) -> List[np.ndarray]:

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fix: `VLLMBackend` read a label missing from the server's `top_logprobs` as -30, which gave a
+  confident wrong distribution with no error. It now raises `LabelTokenError` naming the missing ids. vLLM
+  0.17.1 on CUDA returns exactly the labels (checked); a build that reports raw full-vocabulary logprobs
+  can leave one out (vllm-metal), which `--logprobs-mode processed_logprobs` fixes. Reported by @tak-bro in #13.
 - **New: `scripts/eval_tacit.py`, the evaluation harness behind the README's Tacit numbers.** It decides
   every item of the JevBench public set (from a checkout of github.com/fstandhartinger/jevbench) or the
   bev-decision test split through `Tacit` against one or more `vllm serve` replicas, one forward or

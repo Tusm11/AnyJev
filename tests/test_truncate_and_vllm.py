@@ -133,3 +133,32 @@ def test_the_config_comes_from_the_source_not_the_served_alias(stub, monkeypatch
     be = _backend(stub, monkeypatch)
     assert be.name == "served-alias"
     assert be.source == "some/real-model"
+
+
+def test_a_label_missing_from_top_logprobs_raises_instead_of_reading_minus_30(monkeypatch):
+    """A server that reports raw full-vocabulary logprobs can leave a label out of the top K (seen on
+    vllm-metal); it used to be read as -30, a confident wrong distribution with no error (#13)."""
+    import io
+
+    from anyjev.backends import vllm as V
+    from anyjev.readout import LabelTokenError
+
+    class Tok:
+        def decode(self, ids):
+            return {7: " A", 8: " B"}[ids[0]]
+
+        def convert_ids_to_tokens(self, tid):
+            return {7: "ĠA", 8: "ĠB"}[tid]
+
+    be = V.VLLMBackend.__new__(V.VLLMBackend)              # no tokenizer download
+    be.base_url, be.name, be.api_key, be.timeout, be.tokenizer = "http://x", "m", "EMPTY", 1.0, Tok()
+
+    def reply(top):
+        body = json.dumps({"choices": [{"logprobs": {"top_logprobs": [top]}}]}).encode()
+        monkeypatch.setattr(V.urllib.request, "urlopen", lambda req, timeout=None: io.BytesIO(body))
+
+    reply({" A": -0.1, " B": -2.4})
+    assert be._one("p", [7, 8]).tolist() == [-0.1, -2.4]
+    reply({" A": -0.1, " The": -2.0})                     # B fell outside the top 2
+    with pytest.raises(LabelTokenError, match="processed_logprobs"):
+        be._one("p", [7, 8])
