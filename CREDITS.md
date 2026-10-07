@@ -20,6 +20,10 @@ CHANGELOG next to what they fixed.
 - **[@lws2004](https://github.com/lws2004)** — found that the `hf` extra could not build a backend
   at all, traced it to `device_map` and the undeclared `accelerate`, and supplied the change that
   fixes that, the Apple Silicon segfault and the `.model` assumption together (#5).
+- **[@shentonyan](https://github.com/shentonyan)** — wrote the SGLang backend (`anyjev/backends/sglang.py`)
+  with its parity script and contract tests, and reworked it onto SGLang's real response shape (#12).
+- **[@tak-bro](https://github.com/tak-bro)** — found that `VLLMBackend` silently read a label missing from
+  the server's top log-probabilities as -30, and traced it to vLLM's raw log-probability mode (#13).
 
 ## Methods implemented
 

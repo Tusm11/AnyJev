@@ -7,11 +7,14 @@
   the requested ids from `meta_info["output_token_ids_logprobs"][0]` by id, so no token is sampled. Checked
   on SGLang 0.5.10 with Qwen2.5-7B-Instruct against `HFBackend` (`scripts/sglang_parity.py`); L2 hidden states
   are not available. The contract tests run against a stub in CI; the engine smoke test is marked
-  `@pytest.mark.engine`.
+  `@pytest.mark.engine`. Contributed by @shentonyan in #12.
 - Fix: `VLLMBackend` read a label missing from the server's `top_logprobs` as -30, which gave a
-  confident wrong distribution with no error. It now raises `LabelTokenError` naming the missing ids. vLLM
-  0.17.1 on CUDA returns exactly the labels (checked); a build that reports raw full-vocabulary logprobs
-  can leave one out (vllm-metal), which `--logprobs-mode processed_logprobs` fixes. Reported by @tak-bro in #13.
+  confident wrong distribution with no error. It now raises `LabelTokenError` naming the missing ids.
+  vLLM's default `--logprobs-mode` (raw logprobs, before the `allowed_token_ids` restriction) returns the
+  model's own top K, so a label is missing whenever the model's mass is elsewhere (seen on vLLM 0.17.1 with
+  Nemotron-H and on vllm-metal); start the server with `--logprobs-mode processed_logprobs`, which returns
+  exactly the labels (checked on 0.17.1); the module docstring's server command now passes it. Reported by
+  @tak-bro in #13.
 - **New: `scripts/eval_tacit.py`, the evaluation harness behind the README's Tacit numbers.** It decides
   every item of the JevBench public set (from a checkout of github.com/fstandhartinger/jevbench) or the
   bev-decision test split through `Tacit` against one or more `vllm serve` replicas, one forward or

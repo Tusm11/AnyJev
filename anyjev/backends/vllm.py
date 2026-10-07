@@ -3,14 +3,15 @@
 Two server shapes, because vLLM gives one task per instance.
 
 **raw / L0** -- a generate server. One request per prompt with `max_tokens=1`,
-`allowed_token_ids` restricted to the label tokens and `logprobs=K`. vLLM reports
-logprobs after its logit processors, so the K entries are exactly the labels,
-normalized over them (checked on vLLM 0.17.1). A build that reports raw full-vocabulary
-logprobs instead can leave a label out (seen on vllm-metal); the backend then raises
-rather than guess, and `--logprobs-mode processed_logprobs` on the server fixes it.
-Prefix caching makes the K permutations of one state cheap.
+`allowed_token_ids` restricted to the label tokens and `logprobs=K`. Start the server with
+`--logprobs-mode processed_logprobs`: the logprobs are then taken after the restriction, so the
+K entries are exactly the labels, normalized over them. By default vLLM reports raw logprobs,
+taken before the restriction: the K entries are the model's own top K tokens, which are the
+labels only when the model puts its mass on them. A missing label raises rather than being
+guessed (seen on vLLM 0.17.1 with Nemotron-H, whose top tokens began a thought). Prefix
+caching makes the K permutations of one state cheap.
 
-    vllm serve Qwen/Qwen3-8B --enable-prefix-caching
+    vllm serve Qwen/Qwen3-8B --enable-prefix-caching --logprobs-mode processed_logprobs
     Decider(VLLMBackend("http://localhost:8000", "Qwen/Qwen3-8B"))
 
 **Hidden states** -- an embed server whose pooler is told to return the last position's hidden
