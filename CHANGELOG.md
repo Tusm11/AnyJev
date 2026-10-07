@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **New: `SGLangBackend`** (`anyjev/backends/sglang.py`), the native `/generate` scoring path. It sends the
+  prompt's token ids alone with `max_new_tokens=0`, `return_logprob=True` and `token_ids_logprob`, and reads
+  the requested ids from `meta_info["output_token_ids_logprobs"][0]` by id, so no token is sampled. Checked
+  on SGLang 0.5.10 with Qwen2.5-7B-Instruct against `HFBackend` (`scripts/sglang_parity.py`); L2 hidden states
+  are not available. The contract tests run against a stub in CI; the engine smoke test is marked
+  `@pytest.mark.engine`.
 - Fix: `VLLMBackend` read a label missing from the server's `top_logprobs` as -30, which gave a
   confident wrong distribution with no error. It now raises `LabelTokenError` naming the missing ids. vLLM
   0.17.1 on CUDA returns exactly the labels (checked); a build that reports raw full-vocabulary logprobs
